@@ -1,0 +1,229 @@
+# Configuraciones compartidas usando YAML anchors
+x-glitchtip-environment: &glitchtip-environment
+  DATABASE_URL: postgresql://postgres:postgres@glitchtip_postgres:5432/glitchtip
+  REDIS_URL: redis://glitchtip_redis:6379/0
+  SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-647517bc50393b855beed2579999715e3ccbf1ee98e03a25479b83edcfc331fd768ac9f663cea3781e86df571b93767978a2}
+  PORT: 8000
+  EMAIL_URL: consolemail://
+  GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-http://localhost:8000}
+  DEFAULT_FROM_EMAIL: noreply@imox.local
+  CELERY_WORKER_AUTOSCALE: "1,3"
+  ENABLE_OPEN_USER_REGISTRATION: "True"
+
+services:
+  # ==================== BASE DE DATOS IMOX ====================
+
+  mongodb:
+    image: mongo:8.0
+    container_name: imox_mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin123}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-imox_db}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - imox_network
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: imox_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-imox_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-imox_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-imox_auth}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - imox_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-imox_user}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== MQTT BROKER ====================
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: imox_mosquitto
+    restart: unless-stopped
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "${MQTT_WS_PORT:-9001}:9001"
+    volumes:
+      - ./mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      - imox_network
+    healthcheck:
+      test: [ "CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==================== BACKEND NEST.JS ====================
+
+  nestjs:
+    build:
+      context: ..
+      dockerfile: docker/nestjs/Dockerfile
+      target: development
+    container_name: imox_nestjs
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    ports:
+      - "${NESTJS_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+
+      # MongoDB
+      MONGO_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongodb:27017/${MONGO_DATABASE:-imox_db}?authSource=admin
+
+      # PostgreSQL
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-imox_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-imox_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-imox_auth}
+
+      # MQTT
+      MQTT_BROKER_URL: mqtt://mosquitto:1883
+      MQTT_CLIENT_ID: imox_backend
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password}
+
+      # GlitchTip (opcional hasta que se configure)
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+    volumes:
+      - ../src:/app/src
+      - ../package.json:/app/package.json
+      - ../tsconfig.json:/app/tsconfig.json
+      - /app/node_modules
+    networks:
+      - imox_network
+    command: npm run start:dev
+
+  # ==================== REDIS (Sesiones y Caché) ====================
+
+  redis:
+    image: redis:7-alpine
+    container_name: imox_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - imox_network
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== GLITCHTIP (Error Tracking) ====================
+
+  glitchtip_postgres:
+    image: postgres:16-alpine
+    container_name: imox_glitchtip_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - glitchtip_postgres_data:/var/lib/postgresql/data
+    networks:
+      - imox_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  glitchtip_redis:
+    image: redis:7-alpine
+    container_name: imox_glitchtip_redis
+    restart: unless-stopped
+    networks:
+      - imox_network
+
+  glitchtip_web:
+    image: glitchtip/glitchtip
+    container_name: imox_glitchtip_web
+    restart: unless-stopped
+    depends_on:
+      glitchtip_postgres:
+        condition: service_healthy
+      glitchtip_redis:
+        condition: service_started
+    ports:
+      - "${GLITCHTIP_PORT:-8000}:8000"
+    environment: *glitchtip-environment
+    volumes:
+      - glitchtip_uploads:/code/uploads
+    networks:
+      - imox_network
+
+  glitchtip_worker:
+    image: glitchtip/glitchtip
+    container_name: imox_glitchtip_worker
+    restart: unless-stopped
+    command: ./bin/run-celery-with-beat.sh
+    depends_on:
+      glitchtip_postgres:
+        condition: service_healthy
+      glitchtip_redis:
+        condition: service_started
+    environment: *glitchtip-environment
+    volumes:
+      - glitchtip_uploads:/code/uploads
+    networks:
+      - imox_network
+  # ==================== VOLUMES ====================
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+  postgres_data:
+  mosquitto_data:
+  mosquitto_logs:
+  redis_data:
+  glitchtip_postgres_data:
+  glitchtip_uploads:
+
+    # ==================== NETWORKS ====================
+
+networks:
+  imox_network:
+    driver: bridge
