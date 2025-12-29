@@ -56,14 +56,14 @@ chmod +x scripts/*.sh
 
 ## 🔗 URLs de Acceso
 
-| Servicio | URL | Descripción |
-|----------|-----|-------------|
-| **Backend API** | http://localhost:3000 | API REST Nest.js |
-| **GlitchTip** | http://localhost:8000 | Dashboard de errores |
-| **MongoDB** | localhost:27017 | Base de datos telemetría |
-| **PostgreSQL** | localhost:5432 | Base de datos auth |
-| **MQTT TCP** | localhost:1883 | Broker MQTT |
-| **MQTT WebSocket** | ws://localhost:9001 | MQTT vía WebSocket |
+| Servicio           | URL                   | Descripción              |
+| ------------------ | --------------------- | ------------------------ |
+| **Backend API**    | http://localhost:3000 | API REST Nest.js         |
+| **GlitchTip**      | http://localhost:8000 | Dashboard de errores     |
+| **MongoDB**        | localhost:27017       | Base de datos telemetría |
+| **PostgreSQL**     | localhost:5432        | Base de datos auth       |
+| **MQTT TCP**       | localhost:1883        | Broker MQTT              |
+| **MQTT WebSocket** | ws://localhost:9001   | MQTT vía WebSocket       |
 
 ## 📦 Servicios Individuales
 
@@ -138,17 +138,10 @@ Antes de desplegar en producción, asegúrate de:
 5. ✅ Habilitar HTTPS/TLS para todos los servicios
 6. ✅ Configurar firewall y limitar puertos expuestos
 
-## 📚 Próximos Pasos
-
-1. [ ] Implementar módulos de autenticación (JWT)
-2. [ ] Configurar integración MQTT en Nest.js
-3. [ ] Crear endpoints REST para gestión de dispositivos
-4. [ ] Implementar almacenamiento de telemetría en MongoDB
-5. [ ] Integrar SDK de GlitchTip para logging
-
 ## 🐛 Troubleshooting
 
 ### Puerto ya en uso
+
 ```bash
 # Verificar qué está usando el puerto
 lsof -i :3000
@@ -158,6 +151,7 @@ lsof -i :3000
 ```
 
 ### Problemas de permisos
+
 ```bash
 # Dar permisos a scripts
 chmod +x scripts/*.sh
@@ -167,12 +161,9 @@ sudo chown -R 1883:1883 docker/volumes/mosquitto/
 ```
 
 ### Reset completo
+
 ```bash
 # Detener y eliminar TODO (⚠️ BORRA DATOS)
 ./scripts/stop-all.sh --remove-volumes
 ./scripts/start-dev.sh
 ```
-
-## 📞 Soporte
-
-Para reportar problemas o sugerencias, crear un issue en el repositorio.

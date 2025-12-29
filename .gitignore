@@ -62,3 +62,6 @@ docker/**/*.log
 # MQTT Mosquitto data
 docker/mqtt/data/
 docker/mqtt/log/
+
+# Prisma generated
+generated

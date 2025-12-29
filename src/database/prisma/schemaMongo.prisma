@@ -1,0 +1,20 @@
+generator client {
+  provider     = "prisma-client-js"
+  output       = "../../../generated/prismaMongo"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL_MONGO")
+}
+
+model Telemetry {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  iot_id    Int
+  user_id   Int
+  payload   Json     // Guardamos el objeto completo de lectura aquí
+  timestamp DateTime @default(now())
+
+  @@map("telemetry")
+}

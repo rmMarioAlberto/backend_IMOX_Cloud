@@ -23,11 +23,11 @@ cd "$(dirname "$0")/../docker"
 # Verificar si se debe eliminar volúmenes
 if [ "$1" == "--remove-volumes" ] || [ "$1" == "-v" ]; then
     echo "Eliminando contenedores y volúmenes..."
-    $DOCKER_COMPOSE down -v
+    $DOCKER_COMPOSE --env-file ../.env down -v
     echo "Contenedores y volúmenes eliminados."
 else
     echo "Deteniendo contenedores (volúmenes preservados)..."
-    $DOCKER_COMPOSE down
+    $DOCKER_COMPOSE --env-file ../.env down
     echo "Contenedores detenidos."
     echo ""
     echo "Para eliminar también los volúmenes (DATOS PERDIDOS):"

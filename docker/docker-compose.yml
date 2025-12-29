@@ -159,7 +159,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_DB: glitchtip
       POSTGRES_HOST_AUTH_METHOD: trust
     volumes:
       - glitchtip_postgres_data:/var/lib/postgresql/data
@@ -178,6 +178,19 @@ services:
     networks:
       - imox_network
 
+  glitchtip_migrate:
+    image: glitchtip/glitchtip
+    container_name: imox_glitchtip_migrate
+    depends_on:
+      glitchtip_postgres:
+        condition: service_healthy
+      glitchtip_redis:
+        condition: service_started
+    environment: *glitchtip-environment
+    command: "./bin/run-migrate.sh"
+    networks:
+      - imox_network
+
   glitchtip_web:
     image: glitchtip/glitchtip
     container_name: imox_glitchtip_web
@@ -187,6 +200,8 @@ services:
         condition: service_healthy
       glitchtip_redis:
         condition: service_started
+      glitchtip_migrate:
+        condition: service_completed_successfully
     ports:
       - "${GLITCHTIP_PORT:-8000}:8000"
     environment: *glitchtip-environment
@@ -205,6 +220,8 @@ services:
         condition: service_healthy
       glitchtip_redis:
         condition: service_started
+      glitchtip_migrate:
+        condition: service_completed_successfully
     environment: *glitchtip-environment
     volumes:
       - glitchtip_uploads:/code/uploads

@@ -36,13 +36,13 @@ fi
 cd docker
 
 echo "Deteniendo contenedores existentes..."
-$DOCKER_COMPOSE down
+$DOCKER_COMPOSE --env-file ../.env down
 
 echo "Construyendo imágenes..."
-$DOCKER_COMPOSE build
+$DOCKER_COMPOSE --env-file ../.env build
 
 echo "Levantando servicios..."
-$DOCKER_COMPOSE up -d
+$DOCKER_COMPOSE --env-file ../.env up -d
 
 echo ""
 echo "Servicios iniciados correctamente!"
@@ -70,8 +70,6 @@ echo "   - redis"
 echo "   - mosquitto"
 echo "   - glitchtip_web"
 echo ""
-echo "Si GlitchTip no carga (primera vez), ejecuta:"
-echo "   ./scripts/init-glitchtip.sh"
 echo ""
 echo "Para detener todos los servicios:"
 echo "   ./scripts/stop-all.sh"
