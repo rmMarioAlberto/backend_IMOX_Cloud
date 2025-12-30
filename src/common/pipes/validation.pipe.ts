@@ -3,16 +3,16 @@ import { ValidationPipe } from '@nestjs/common';
 const isProduction = process.env.NODE_ENV === 'production';
 
 export const globalValidationPipe = new ValidationPipe({
-  whitelist: true,
-  forbidNonWhitelisted: true,
-  transform: true,
+  whitelist: true, // Eliminar propiedades no permitidas
+  forbidNonWhitelisted: true, // Prohibir propiedades no permitidas
+  transform: true, // Transformar datos
   transformOptions: {
-    enableImplicitConversion: true,
+    enableImplicitConversion: false, // Convertir datos implícitos
   },
 
-  // En producción: Ocultar detalles de errores de validación
+  //Ocultar detalles de errores de validación
   disableErrorMessages: isProduction,
 
-  // Detener al primer error (mejor performance en producción)
+  // Detener al primer error
   stopAtFirstError: isProduction,
 });

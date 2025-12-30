@@ -4,6 +4,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as Sentry from '@sentry/node';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import { globalValidationPipe } from './common/pipes/validation.pipe';
+import { corsConfig } from './config/cors.config';
+import { AllExceptionsFilter } from './common/filters/exceptions.filter';
 
 async function bootstrap() {
   // Inicializar Sentry
@@ -22,6 +24,12 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule);
+
+  // Configurar CORS para Web, Móvil y IoT
+  app.enableCors(corsConfig);
+
+  // Aplicar filtro global de excepciones
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // Aplicar validación global
   app.useGlobalPipes(globalValidationPipe);

@@ -15,7 +15,7 @@ export class UserService {
 
     const checkUser = await this.prismaPostgresService.users.findUnique({
       where: {
-        email,
+        email: email,
       },
     });
 

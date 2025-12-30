@@ -5,6 +5,7 @@ import {
   MinLength,
   IsNumber,
   IsEmail,
+  IsOptional,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Exclude, Expose } from 'class-transformer';
@@ -32,6 +33,15 @@ export class LoginUserDto {
   @MinLength(8)
   @MaxLength(50)
   password: string;
+
+  @ApiProperty({
+    example: 'android_uuid_12345',
+    description: 'Identificador único del dispositivo',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  deviceId?: string;
 }
 
 @Exclude()
@@ -54,14 +64,22 @@ export class LoginResponseDto {
   @IsNotEmpty()
   refreshToken: string;
 
+  @Expose()
   @ApiProperty({
-    example: 1,
-    description: 'Rol del usuario (1: Usuario, 2: Admin)',
-    enum: [1, 2],
+    description: 'Datos del usuario autenticado',
+    example: {
+      id: 1,
+      name: 'Juan Perez',
+      email: 'juan@imox.cloud',
+      role: 1,
+    },
   })
-  @IsNumber()
-  @IsNotEmpty()
-  role: number;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    role: number;
+  };
 }
 
 export class LogoutUserDto {
@@ -72,6 +90,15 @@ export class LogoutUserDto {
   @IsString()
   @IsNotEmpty()
   refreshToken: string;
+
+  @ApiProperty({
+    example: 'android_uuid_12345',
+    description: 'ID del dispositivo a desconectar',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  deviceId?: string;
 }
 
 @Exclude()
@@ -106,6 +133,26 @@ export class RefreshTokenResponseDto {
   @IsNotEmpty()
   @Expose()
   accessToken: string;
+
+  @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'Nuevo token de refresco (rotación)',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @Expose()
+  refreshToken: string;
+}
+
+export class RequestResetPasswordDto {
+  @ApiProperty({
+    example: 'usuario@imox.cloud',
+    description: 'Correo electrónico para enviar el código de recuperación',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
 }
 
 export class ResetPasswordDto {
@@ -122,12 +169,12 @@ export class ResetPasswordDto {
   password: string;
 
   @ApiProperty({
-    example: 1,
-    description: 'ID del usuario que cambia la contraseña',
+    example: '123456',
+    description: 'Token o Código enviado por correo',
   })
-  @IsNumber()
+  @IsString()
   @IsNotEmpty()
-  id: number;
+  token: string;
 }
 
 @Exclude()

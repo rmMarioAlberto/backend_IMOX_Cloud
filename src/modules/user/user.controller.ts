@@ -5,6 +5,7 @@ import {
   UseInterceptors,
   ClassSerializerInterceptor,
   HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { RegisterUserDto, RegisterResponseDto } from './dto/user.dto';
@@ -16,13 +17,13 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post('register')
-  @HttpCode(201)
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Registrar un nuevo usuario',
     description: 'Crea un usuario en PostgreSQL si el email no existe.',
   })
   @ApiResponse({
-    status: 201,
+    status: HttpStatus.CREATED,
     description: 'Usuario creado exitosamente.',
     type: RegisterResponseDto,
   })

@@ -1,0 +1,214 @@
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
+import { createClient, RedisClientType } from 'redis';
+
+@Injectable()
+export class RedisService implements OnModuleInit, OnModuleDestroy {
+  private client: RedisClientType;
+  private readonly logger = new Logger(RedisService.name);
+
+  async onModuleInit() {
+    const redisUrl = process.env.REDIS_URL;
+
+    if (!redisUrl) {
+      throw new Error('REDIS_URL environment variable is not defined');
+    }
+
+    this.client = createClient({
+      url: redisUrl,
+      socket: {
+        reconnectStrategy: (retries) => {
+          if (retries > 10) {
+            this.logger.error('Redis: Máximo de reintentos alcanzado');
+            return new Error('Redis connection failed');
+          }
+          const delay = Math.min(retries * 100, 3000);
+          this.logger.warn(`Redis: Reintentando conexión en ${delay}ms...`);
+          return delay;
+        },
+      },
+    });
+
+    this.client.on('error', (err) => {
+      this.logger.error('Redis Client Error', err);
+    });
+
+    this.client.on('connect', () => {
+      this.logger.log('Redis conectado correctamente');
+    });
+
+    this.client.on('ready', () => {
+      this.logger.log('Redis listo para recibir comandos');
+    });
+
+    await this.client.connect();
+  }
+
+  async onModuleDestroy() {
+    await this.client.quit();
+    this.logger.log('Redis desconectado');
+  }
+
+  /**
+   * Obtener el cliente de Redis para operaciones avanzadas
+   */
+  getClient(): RedisClientType {
+    return this.client;
+  }
+
+  // ==================== Operaciones de IoT ====================
+
+  /**
+   * Guardar última lectura del IoT (para acceso rápido desde la app móvil)
+   */
+  async saveLastReading(iotId: number, reading: any): Promise<void> {
+    const key = `imox:iot:live:${iotId}`;
+    await this.client.set(key, JSON.stringify(reading), {
+      EX: 3600, // 1 hora
+    });
+  }
+
+  /**
+   * Obtener última lectura del IoT
+   */
+  async getLastReading(iotId: number): Promise<any | null> {
+    const key = `imox:iot:live:${iotId}`;
+    const data = await this.client.get(key);
+    return data ? JSON.parse(data) : null;
+  }
+
+  // ==================== Operaciones de Autenticación ====================
+
+  /**
+   * Guardar Refresh Token
+   */
+  async saveRefreshToken(
+    userId: number,
+    deviceId: string,
+    token: string,
+  ): Promise<void> {
+    const key = `imox:auth:refresh:${userId}:${deviceId}`;
+    await this.client.set(key, token, {
+      EX: 7 * 24 * 60 * 60, // 7 días
+    });
+  }
+
+  /**
+   * Obtener Refresh Token
+   */
+  async getRefreshToken(
+    userId: number,
+    deviceId: string,
+  ): Promise<string | null> {
+    const key = `imox:auth:refresh:${userId}:${deviceId}`;
+    return await this.client.get(key);
+  }
+
+  /**
+   * Eliminar Refresh Token (logout)
+   */
+  async deleteRefreshToken(userId: number, deviceId: string): Promise<void> {
+    const key = `imox:auth:refresh:${userId}:${deviceId}`;
+    await this.client.del(key);
+  }
+
+  /**
+   * Guardar token de reset de contraseña
+   */
+  async savePasswordResetToken(token: string, userId: number): Promise<void> {
+    const key = `imox:auth:reset_token:${token}`;
+    await this.client.set(key, userId.toString(), {
+      EX: 15 * 60, // 15 minutos
+    });
+  }
+
+  /**
+   * Obtener userId del token de reset
+   */
+  async getPasswordResetUserId(token: string): Promise<number | null> {
+    const key = `imox:auth:reset_token:${token}`;
+    const userId = await this.client.get(key);
+    return userId ? parseInt(userId, 10) : null;
+  }
+
+  /**
+   * Eliminar token de reset de contraseña (ya usado)
+   */
+  async deletePasswordResetToken(token: string): Promise<void> {
+    const key = `imox:auth:reset_token:${token}`;
+    await this.client.del(key);
+  }
+
+  /**
+   * Verifica Rate Limit (Límite de intentos)
+   * Retorna true si debe ser bloqueado, false si está limpio.
+   */
+  async shouldBlockRequest(
+    identifier: string,
+    seconds: number,
+  ): Promise<boolean> {
+    const key = `imox:ratelimit:${identifier}`;
+    const exists = await this.client.get(key);
+    if (exists) {
+      return true; // Ya existe, bloquear
+    }
+    // No existe, crear bloqueo temporal
+    await this.client.set(key, '1', { EX: seconds });
+    return false;
+  }
+
+  // ==================== Blacklist de Tokens ====================
+
+  /**
+   * Agregar Access Token a blacklist (logout antes de expiración)
+   */
+  async blacklistToken(token: string, expiresInSeconds: number): Promise<void> {
+    const key = `imox:auth:blacklist:${token}`;
+    await this.client.set(key, '1', {
+      EX: expiresInSeconds,
+    });
+  }
+
+  /**
+   * Verificar si un token está en blacklist
+   */
+  async isTokenBlacklisted(token: string): Promise<boolean> {
+    const key = `imox:auth:blacklist:${token}`;
+    const result = await this.client.get(key);
+    return result !== null;
+  }
+
+  // ==================== Operaciones Genéricas ====================
+
+  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
+    if (ttlSeconds) {
+      await this.client.set(key, value, { EX: ttlSeconds });
+    } else {
+      await this.client.set(key, value);
+    }
+  }
+
+  async get(key: string): Promise<string | null> {
+    return await this.client.get(key);
+  }
+
+  async del(key: string): Promise<void> {
+    await this.client.del(key);
+  }
+
+  async exists(key: string): Promise<boolean> {
+    return (await this.client.exists(key)) === 1;
+  }
+
+  async expire(key: string, seconds: number): Promise<void> {
+    await this.client.expire(key, seconds);
+  }
+
+  async ttl(key: string): Promise<number> {
+    return await this.client.ttl(key);
+  }
+}
