@@ -34,22 +34,24 @@ services:
       timeout: 5s
       retries: 5
 
-  postgres:
-    image: postgres:17-alpine
-    container_name: imox_postgres
+  mysql:
+    image: mysql:8.0
+    container_name: imox_mysql
     restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-imox_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-imox_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-imox_auth}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-admin123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-imox_auth}
+      MYSQL_USER: ${MYSQL_USER:-imox_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-imox_pass}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${MYSQL_PORT:-3306}:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     networks:
       - imox_network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-imox_user}" ]
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -87,7 +89,7 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
-      postgres:
+      mysql:
         condition: service_healthy
       mosquitto:
         condition: service_healthy
@@ -100,12 +102,12 @@ services:
       # MongoDB
       MONGO_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongodb:27017/${MONGO_DATABASE:-imox_db}?authSource=admin
 
-      # PostgreSQL
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-imox_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-imox_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-imox_auth}
+      # MySQL
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-imox_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-imox_pass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-imox_auth}
 
       # MQTT
       MQTT_BROKER_URL: mqtt://mosquitto:1883
@@ -232,7 +234,7 @@ services:
 volumes:
   mongodb_data:
   mongodb_config:
-  postgres_data:
+  mysql_data:
   mosquitto_data:
   mosquitto_logs:
   redis_data:

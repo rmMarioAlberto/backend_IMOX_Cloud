@@ -1,19 +1,19 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { RegisterUserDto, RegisterResponseDto } from './dto/user.dto';
-import { PrismaPostgresService } from '../prisma/prisma-postgres.service';
+import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
 import { plainToInstance } from 'class-transformer';
 import { hash } from 'bcrypt';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prismaPostgresService: PrismaPostgresService) {}
+  constructor(private readonly prismaService: PrismaMysqlService) {}
 
   async register(
     registerUserDto: RegisterUserDto,
   ): Promise<RegisterResponseDto> {
     const { name, email, password } = registerUserDto;
 
-    const checkUser = await this.prismaPostgresService.users.findUnique({
+    const checkUser = await this.prismaService.users.findUnique({
       where: {
         email: email,
       },
@@ -23,7 +23,7 @@ export class UserService {
       throw new ConflictException('El correo ya está registrado');
     }
 
-    const newUser = await this.prismaPostgresService.users.create({
+    const newUser = await this.prismaService.users.create({
       data: {
         name,
         email,

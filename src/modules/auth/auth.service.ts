@@ -15,7 +15,7 @@ import {
   ResetPasswordDto,
   ResetPasswordResponseDto,
 } from './dto/auth.dto';
-import { PrismaPostgresService } from '../prisma/prisma-postgres.service';
+import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from './jwt.service';
 import { MailService } from '../mail/mail.service';
@@ -24,7 +24,7 @@ import { MailService } from '../mail/mail.service';
 export class AuthService {
   constructor(
     private readonly redisService: RedisService,
-    private readonly postgresService: PrismaPostgresService,
+    private readonly prismaService: PrismaMysqlService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
   ) {}
@@ -32,7 +32,7 @@ export class AuthService {
   async login(loginUserDto: LoginUserDto): Promise<LoginResponseDto> {
     const { email, password } = loginUserDto;
 
-    const user = await this.postgresService.users.findUnique({
+    const user = await this.prismaService.users.findUnique({
       where: { email },
     });
 
@@ -115,7 +115,7 @@ export class AuthService {
         throw new UnauthorizedException('Token inválido o reusado');
       }
 
-      const user = await this.postgresService.users.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: userId, status: 1 },
       });
 
@@ -165,7 +165,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 3. Actualizar usuario
-    await this.postgresService.users.update({
+    await this.prismaService.users.update({
       where: { id: userId },
       data: { password: hashedPassword },
     });
@@ -188,7 +188,7 @@ export class AuthService {
       );
     }
 
-    const user = await this.postgresService.users.findUnique({
+    const user = await this.prismaService.users.findUnique({
       where: { email },
     });
 

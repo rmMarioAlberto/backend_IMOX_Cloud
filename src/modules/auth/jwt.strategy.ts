@@ -1,14 +1,14 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { PrismaPostgresService } from '../prisma/prisma-postgres.service';
+import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
 import { RedisService } from '../redis/redis.service';
 import { Request } from 'express';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    private readonly prisma: PrismaPostgresService,
+    private readonly prisma: PrismaMysqlService,
     private readonly redisService: RedisService,
   ) {
     super({
