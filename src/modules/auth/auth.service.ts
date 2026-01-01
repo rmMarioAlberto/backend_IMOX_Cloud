@@ -46,6 +46,10 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
+    if (user.status !== 1) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
     const deviceId = loginUserDto.deviceId || 'mobile_app_default';
 
     const payload = {

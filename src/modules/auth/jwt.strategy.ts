@@ -24,7 +24,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (token) {
       const isBlacklisted = await this.redisService.isTokenBlacklisted(token);
       if (isBlacklisted) {
-        throw new UnauthorizedException('Token invalidado (logout)');
+        throw new UnauthorizedException('Token invalidado');
       }
     }
 
@@ -33,7 +33,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!user) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('Usuario no encontrado');
     }
 
     return { id: user.id, email: user.email, role: user.role };

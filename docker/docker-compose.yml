@@ -17,10 +17,7 @@ services:
     image: mongo:8.0
     container_name: imox_mongodb
     restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-admin123}
-      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-imox_db}
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
     ports:
       - "${MONGO_PORT:-27017}:27017"
     volumes:
@@ -29,7 +26,7 @@ services:
     networks:
       - imox_network
     healthcheck:
-      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      test: [ "CMD", "mongosh", "--eval", "try { rs.status() } catch (err) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}) }" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -100,7 +97,7 @@ services:
       PORT: 3000
 
       # MongoDB
-      MONGO_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-admin123}@mongodb:27017/${MONGO_DATABASE:-imox_db}?authSource=admin
+      MONGO_URI: mongodb://mongodb:27017/${MONGO_DATABASE:-imox_db}
 
       # MySQL
       MYSQL_HOST: mysql

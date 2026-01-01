@@ -1,8 +1,19 @@
-import { Injectable, ConflictException } from '@nestjs/common';
-import { RegisterUserDto, RegisterResponseDto } from './dto/user.dto';
+import {
+  Injectable,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
+import {
+  RegisterUserDto,
+  RegisterResponseDto,
+  responseGetProfileDto,
+  editProfileDto,
+} from './dto/user.dto';
+import { UserPayloadDto } from '../auth/dto/auth.dto';
 import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
 import { plainToInstance } from 'class-transformer';
 import { hash } from 'bcrypt';
+import { responseMessage } from 'src/common/utils/dto/utils.dto';
 
 @Injectable()
 export class UserService {
@@ -34,5 +45,31 @@ export class UserService {
     });
 
     return plainToInstance(RegisterResponseDto, newUser);
+  }
+
+  async getProfile(user: UserPayloadDto): Promise<responseGetProfileDto> {
+    const { id } = user;
+
+    const userFound = await this.prismaService.users.findUnique({
+      where: { id: id, status: 1 },
+    });
+    if (!userFound) {
+      throw new BadRequestException('User not found');
+    }
+    return plainToInstance(responseGetProfileDto, userFound);
+  }
+
+  async editProfile(
+    dto: editProfileDto,
+    userId: number,
+  ): Promise<responseMessage> {
+    const { name } = dto;
+
+    await this.prismaService.users.update({
+      where: { id: userId },
+      data: { name },
+    });
+
+    return { message: 'user updated' };
   }
 }

@@ -186,5 +186,15 @@ export class ResetPasswordResponseDto {
   @IsString()
   @IsNotEmpty()
   @Expose()
+  @ApiProperty({
+    example: 'Contraseña actualizada exitosamente',
+    description: 'Mensaje de confirmación',
+  })
   message: string;
+}
+
+export class UserPayloadDto {
+  id: number;
+  email: string;
+  role: number;
 }

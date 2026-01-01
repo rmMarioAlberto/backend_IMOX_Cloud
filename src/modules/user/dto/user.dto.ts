@@ -1,9 +1,13 @@
 import {
   IsEmail,
+  isNotEmpty,
   IsNotEmpty,
+  IsNumber,
   IsString,
   MaxLength,
+  Min,
   MinLength,
+  IsArray,
 } from 'class-validator';
 import { Exclude, Expose } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -48,4 +52,41 @@ export class RegisterResponseDto {
   @ApiProperty({ example: 1, description: 'ID único del usuario creado' })
   @Expose()
   id: number;
+}
+
+@Exclude()
+export class responseGetProfileDto {
+  @ApiProperty({ example: 1, description: 'ID único del usuario' })
+  @Expose()
+  @IsNotEmpty()
+  @IsNumber()
+  id: number;
+
+  @ApiProperty({
+    example: 'user1@gmail.com',
+    description: 'Correo electrónico del usuario',
+  })
+  @Expose()
+  @IsNotEmpty()
+  @IsString()
+  email: string;
+
+  @ApiProperty({ example: 'user', description: 'Nombre del usuario' })
+  @Expose()
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @ApiProperty({ example: 1, description: 'ID del rol asignado' })
+  @Expose()
+  @IsNotEmpty()
+  @IsNumber()
+  role: number;
+}
+
+export class editProfileDto {
+  @ApiProperty({ example: 'carlos', description: 'username' })
+  @IsNotEmpty()
+  @IsString()
+  name: string;
 }

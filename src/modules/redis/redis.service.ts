@@ -81,6 +81,86 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return data ? JSON.parse(data) : null;
   }
 
+  // ==================== Telemetry Operations ====================
+
+  /**
+   * Guardar última lectura para telemetría (usado por MQTT)
+   */
+  async setTelemetryLast(
+    iotId: number,
+    data: any,
+    ttl: number = 600,
+  ): Promise<void> {
+    const key = `iot:${iotId}:last`;
+    await this.client.set(key, JSON.stringify(data), { EX: ttl });
+  }
+
+  /**
+   * Obtener última lectura de telemetría
+   */
+  async getTelemetryLast(iotId: number): Promise<any | null> {
+    const key = `iot:${iotId}:last`;
+    const data = await this.client.get(key);
+    return data ? JSON.parse(data) : null;
+  }
+
+  /**
+   * Agregar evento crítico al buffer
+   */
+  async pushCriticalEvent(iotId: number, data: any): Promise<void> {
+    const key = `iot:${iotId}:critical_buffer`;
+    await this.client.lPush(key, JSON.stringify(data));
+    // Limitar a últimos 100 eventos
+    await this.client.lTrim(key, 0, 99);
+    // Agregar TTL de 1 hora para evitar keys huérfanas
+    await this.client.expire(key, 3600);
+  }
+
+  /**
+   * Obtener todos los eventos críticos del buffer
+   */
+  async getCriticalEvents(iotId: number): Promise<any[]> {
+    const key = `iot:${iotId}:critical_buffer`;
+    const events = await this.client.lRange(key, 0, -1);
+    return events.map((e) => JSON.parse(e));
+  }
+
+  /**
+   * Limpiar buffer de eventos críticos
+   */
+  async clearCriticalEvents(iotId: number): Promise<void> {
+    const key = `iot:${iotId}:critical_buffer`;
+    await this.client.del(key);
+  }
+
+  /**
+   * Guardar baseline para detección de picos
+   */
+  async setBaseline(
+    iotId: number,
+    data: any,
+    ttl: number = 3600,
+  ): Promise<void> {
+    const key = `iot:${iotId}:baseline`;
+    await this.client.set(key, JSON.stringify(data), { EX: ttl });
+  }
+
+  /**
+   * Obtener baseline
+   */
+  async getBaseline(iotId: number): Promise<any | null> {
+    const key = `iot:${iotId}:baseline`;
+    const data = await this.client.get(key);
+    return data ? JSON.parse(data) : null;
+  }
+
+  /**
+   * Obtener todas las keys que coincidan con un patrón
+   */
+  async keys(pattern: string): Promise<string[]> {
+    return await this.client.keys(pattern);
+  }
+
   // ==================== Operaciones de Autenticación ====================
 
   /**

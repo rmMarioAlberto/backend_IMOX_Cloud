@@ -1,18 +1,32 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { UserModule } from './modules/user/user.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
 import { MailModule } from './modules/mail/mail.module';
+import { IotModule } from './modules/iot/iot.module';
+import { MqttModule } from './modules/mqtt/mqtt.module';
+import { TelemetryModule } from './modules/telemetry/telemetry.module';
 
 @Module({
-  imports: [UserModule, AuthModule, PrismaModule, RedisModule, MailModule],
+  imports: [
+    ScheduleModule.forRoot(),
+    UserModule,
+    AuthModule,
+    PrismaModule,
+    RedisModule,
+    MailModule,
+    IotModule,
+    MqttModule,
+    TelemetryModule,
+  ],
   controllers: [],
   providers: [],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RateLimitMiddleware).forRoutes('*'); // Aplicar a todas las rutas
+    consumer.apply(RateLimitMiddleware).forRoutes('*');
   }
 }

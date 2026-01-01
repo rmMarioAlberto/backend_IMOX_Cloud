@@ -1,22 +1,26 @@
 {
-    "object_id": "ObjectId",
-    "iot_id": 1, // id de la iot (postgres)
-    "user_id": 1, // id del usuario (postgres)
-    "lectura": {
-        "electricas": {
-            "voltaje_v": 120.5,
-            "corriente_a": 5.2,
-            "potencia_w": 626.6,
-            "energia_kwh": 120.45,
-            "frecuencia_hz": 60.0,
-            "factor_potencia": 0.98
-        },
-        "diagnostico": {
-            "ip": "192.168.1.50",
-            "rssi_dbm": -45,
-            "pzem_status": "ok",
-            "uptime_s": 3600
-        }
-    },
-    "fecha": "ISODate" // fecha de la lectura
+  "_id": "ObjectId",
+  "iot_id": 1,
+  "user_id": 1,
+  "readings": [
+    {
+      "electricas": {
+        "voltaje_v": 120.5,
+        "corriente_a": 5.2,
+        "potencia_w": 626.6,
+        "energia_kwh": 120.45,
+        "frecuencia_hz": 60.0,
+        "factor_potencia": 0.98
+      },
+      "diagnostico": {
+        "ip": "192.168.1.50",
+        "rssi_dbm": -45,
+        "pzem_status": "ok",
+        "uptime_s": 3600
+      },
+      "timestamp": "ISODate"
+    }
+  ],
+  "created_at": "ISODate",
+  "updated_at": "ISODate"
 }

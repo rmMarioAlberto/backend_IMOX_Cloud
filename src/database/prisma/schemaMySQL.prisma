@@ -9,16 +9,22 @@ datasource db {
 }
 
 model iot {
-  id              Int       @id @default(autoincrement())
-  mac_address     String    @db.VarChar(50)
+  id            Int       @id @default(autoincrement())
+  mac_address   String    @unique(map: "mac_address_UNIQUE") @db.VarChar(50) 
+  device_secret String?   @db.VarChar(255) 
+  status        Int       @default(0) // 0=Inactivo, 1=Activo (Controlado por Admin)
+  is_online     Boolean   @default(false) // true=Conectado, false=Desconectado (Controlado por Sistema)
+  user_id       Int?
+  
+  // Auditoría
   last_connection DateTime? @default(now()) @db.Timestamp(6)
-  status          Int
-  user_id         Int?
-  created_at      DateTime? @default(now()) @db.Timestamp(6)
-  updated_at      DateTime? @default(now()) @db.Timestamp(6)
-  users           users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_user")
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+  updated_at      DateTime @updatedAt @db.Timestamp(6)
 
-  @@index([user_id], map: "fk_user_idx")
+  // Relaciones
+  user users? @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: Cascade, map: "fk_iot_user")
+
+  @@index([user_id], map: "fk_iot_user_idx")
 }
 
 model users {
@@ -28,7 +34,7 @@ model users {
   password   String    @db.VarChar(255)
   role       Int
   status     Int // 1=Activo, 0=Inactivo
-  created_at DateTime? @default(now()) @db.Timestamp(6)
-  updated_at DateTime? @default(now()) @db.Timestamp(6)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
   iot        iot[]
 }

@@ -35,7 +35,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Iniciar sesión',
+    summary: 'Iniciar sesión (public)',
     description:
       'Autentica un usuario con email y contraseña. Retorna Access Token (15m) y Refresh Token (7d). Soporta sesiones múltiples si se envía deviceId.',
   })
@@ -60,7 +60,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Cerrar sesión',
+    summary: 'Cerrar sesión (protected)',
     description: 'Invalida el Refresh Token del usuario.',
   })
   @ApiResponse({
@@ -81,7 +81,7 @@ export class AuthController {
   @Post('refresh-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Refrescar Access Token',
+    summary: 'Refrescar Access Token (protected)',
     description:
       'Genera un nuevo par de tokens usando un Refresh Token válido.',
   })
@@ -94,6 +94,7 @@ export class AuthController {
     status: 401,
     description: 'Refresh token inválido, expirado o reusado',
   })
+  @ApiBearerAuth()
   refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshToken(refreshTokenDto);
   }
@@ -101,7 +102,7 @@ export class AuthController {
   @Post('request-reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Solicitar recuperación de contraseña',
+    summary: 'Solicitar recuperación de contraseña (public)',
     description:
       'Envía un código de recuperación al correo electrónico si existe.',
   })
@@ -116,7 +117,7 @@ export class AuthController {
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Restablecer contraseña',
+    summary: 'Restablecer contraseña (public)',
     description: 'Cambia la contraseña usando el token/código recibido.',
   })
   @ApiResponse({
