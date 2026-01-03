@@ -46,24 +46,11 @@ export class responseIotDto {
 }
 
 export class linkIotUserDto {
-  @ApiProperty({ example: 1, description: 'User ID' })
-  @IsNumber()
-  @IsNotEmpty()
-  userId: number;
-
   @ApiProperty({ example: '00:1A:7D:DA:71:13', description: 'MAC Address' })
   @IsString()
   @IsNotEmpty()
   @IsMACAddress()
   macAddress: string;
-}
-@Exclude()
-export class responseLinkIotUserDto {
-  @ApiProperty({ example: 'IOT linked successfully', description: 'Message' })
-  @IsString()
-  @IsNotEmpty()
-  @Expose()
-  message: string;
 }
 
 export class softResetIotDto {
@@ -72,22 +59,6 @@ export class softResetIotDto {
   @IsNotEmpty()
   @IsMACAddress()
   macAddress: string;
-
-  @ApiProperty({ example: 1, description: 'User ID' })
-  @IsNumber()
-  @IsNotEmpty()
-  userId: number;
-}
-
-export class responseSoftResetIotDto {
-  @ApiProperty({
-    example: 'IOT soft reset successfully',
-    description: 'Message',
-  })
-  @IsString()
-  @IsNotEmpty()
-  @Expose()
-  message: string;
 }
 
 export class GetHistoryDto {
@@ -106,6 +77,14 @@ export class GetHistoryDto {
   @IsNotEmpty()
   @IsString()
   endDate: string;
+
+  @ApiProperty({
+    example: '1',
+    description: 'ID iot',
+  })
+  @IsNotEmpty()
+  @IsNumber()
+  iotId: number;
 }
 
 @Exclude()

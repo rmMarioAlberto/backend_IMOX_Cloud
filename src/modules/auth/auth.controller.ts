@@ -18,13 +18,13 @@ import {
   LoginUserDto,
   LoginResponseDto,
   LogoutUserDto,
-  LogoutResponseDto,
   RefreshTokenDto,
   RefreshTokenResponseDto,
   RequestResetPasswordDto,
   ResetPasswordDto,
   ResetPasswordResponseDto,
 } from './dto/auth.dto';
+import { responseMessage } from '../../common/utils/dto/utils.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @ApiTags('Auth')
@@ -60,16 +60,19 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Cerrar sesión (protected)',
+    summary: 'Cerrar sesión (private)',
     description: 'Invalida el Refresh Token del usuario.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Sesión cerrada exitosamente',
-    type: LogoutResponseDto,
+    type: responseMessage,
   })
   @ApiBearerAuth()
-  logout(@Req() req: any, @Body() logoutUserDto: LogoutUserDto) {
+  logout(
+    @Req() req: any,
+    @Body() logoutUserDto: LogoutUserDto,
+  ): Promise<responseMessage> {
     const accessToken = req.headers.authorization;
     return this.authService.logout(
       req.user.id,
@@ -81,7 +84,7 @@ export class AuthController {
   @Post('refresh-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Refrescar Access Token (protected)',
+    summary: 'Refrescar Access Token (private)',
     description:
       'Genera un nuevo par de tokens usando un Refresh Token válido.',
   })
@@ -95,7 +98,9 @@ export class AuthController {
     description: 'Refresh token inválido, expirado o reusado',
   })
   @ApiBearerAuth()
-  refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
+  refreshToken(
+    @Body() refreshTokenDto: RefreshTokenDto,
+  ): Promise<RefreshTokenResponseDto> {
     return this.authService.refreshToken(refreshTokenDto);
   }
 

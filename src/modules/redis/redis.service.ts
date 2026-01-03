@@ -53,34 +53,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.logger.log('Redis desconectado');
   }
 
-  /**
-   * Obtener el cliente de Redis para operaciones avanzadas
-   */
-  getClient(): RedisClientType {
-    return this.client;
-  }
-
-  // ==================== Operaciones de IoT ====================
-
-  /**
-   * Guardar última lectura del IoT (para acceso rápido desde la app móvil)
-   */
-  async saveLastReading(iotId: number, reading: any): Promise<void> {
-    const key = `imox:iot:live:${iotId}`;
-    await this.client.set(key, JSON.stringify(reading), {
-      EX: 3600, // 1 hora
-    });
-  }
-
-  /**
-   * Obtener última lectura del IoT
-   */
-  async getLastReading(iotId: number): Promise<any | null> {
-    const key = `imox:iot:live:${iotId}`;
-    const data = await this.client.get(key);
-    return data ? JSON.parse(data) : null;
-  }
-
   // ==================== Telemetry Operations ====================
 
   /**
@@ -112,7 +84,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.lPush(key, JSON.stringify(data));
     // Limitar a últimos 100 eventos
     await this.client.lTrim(key, 0, 99);
-    // Agregar TTL de 1 hora para evitar keys huérfanas
+    // Agregar TTL de 1 hora
     await this.client.expire(key, 3600);
   }
 
@@ -234,9 +206,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     const key = `imox:ratelimit:${identifier}`;
     const exists = await this.client.get(key);
     if (exists) {
-      return true; // Ya existe, bloquear
+      return true;
     }
-    // No existe, crear bloqueo temporal
     await this.client.set(key, '1', { EX: seconds });
     return false;
   }
@@ -260,35 +231,5 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     const key = `imox:auth:blacklist:${token}`;
     const result = await this.client.get(key);
     return result !== null;
-  }
-
-  // ==================== Operaciones Genéricas ====================
-
-  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
-    if (ttlSeconds) {
-      await this.client.set(key, value, { EX: ttlSeconds });
-    } else {
-      await this.client.set(key, value);
-    }
-  }
-
-  async get(key: string): Promise<string | null> {
-    return await this.client.get(key);
-  }
-
-  async del(key: string): Promise<void> {
-    await this.client.del(key);
-  }
-
-  async exists(key: string): Promise<boolean> {
-    return (await this.client.exists(key)) === 1;
-  }
-
-  async expire(key: string, seconds: number): Promise<void> {
-    await this.client.expire(key, seconds);
-  }
-
-  async ttl(key: string): Promise<number> {
-    return await this.client.ttl(key);
   }
 }

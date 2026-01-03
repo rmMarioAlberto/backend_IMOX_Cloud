@@ -56,20 +56,24 @@ services:
   # ==================== MQTT BROKER ====================
 
   mosquitto:
-    image: eclipse-mosquitto:2.0
+    image: iegomez/mosquitto-go-auth:latest
     container_name: imox_mosquitto
     restart: unless-stopped
+
     ports:
       - "${MQTT_PORT:-1883}:1883"
       - "${MQTT_WS_PORT:-9001}:9001"
     volumes:
-      - ./mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mqtt/mosquitto.conf:/etc/mosquitto/mosquitto.conf
+      - ./mqtt/acl_file:/etc/mosquitto/acl_file
+      - ./mqtt/password_file:/etc/mosquitto/password_file
       - mosquitto_data:/mosquitto/data
       - mosquitto_logs:/mosquitto/log
+
     networks:
       - imox_network
     healthcheck:
-      test: [ "CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3" ]
+      test: [ "CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -u backend_admin -P backend_secure_password -W 3" ]
       interval: 30s
       timeout: 10s
       retries: 3

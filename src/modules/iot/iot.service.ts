@@ -7,15 +7,17 @@ import {
   createIotDto,
   linkIotUserDto,
   responseIotDto,
-  responseLinkIotUserDto,
   softResetIotDto,
-  responseSoftResetIotDto,
   ResponseHistoryLightweightDto,
+  GetHistoryDto,
 } from './dto/iot.dto';
 import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
+import { responseMessage } from '../../common/utils/dto/utils.dto';
 import { plainToInstance } from 'class-transformer';
 import crypto from 'crypto';
 import { PrismaMongoService } from '../prisma/prisma-mongo.service';
+import { UserPayloadDto } from '../auth/dto/auth.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class IotService {
@@ -28,6 +30,7 @@ export class IotService {
     const { macAddress } = createIotDto;
 
     const deviceSecret = crypto.randomBytes(24).toString('hex');
+    const hashedSecret = await bcrypt.hash(deviceSecret, 10);
 
     const checkIot = await this.prismaMysql.iot.findUnique({
       where: {
@@ -42,18 +45,23 @@ export class IotService {
     const iot = await this.prismaMysql.iot.create({
       data: {
         mac_address: macAddress,
-        device_secret: deviceSecret,
+        device_secret: hashedSecret,
         status: 1,
       },
     });
 
-    return plainToInstance(responseIotDto, iot);
+    return plainToInstance(responseIotDto, {
+      ...iot,
+      device_secret: deviceSecret,
+    });
   }
 
   async linkIotUser(
     linkIotUserDto: linkIotUserDto,
-  ): Promise<responseLinkIotUserDto> {
-    const { userId, macAddress } = linkIotUserDto;
+    user: UserPayloadDto,
+  ): Promise<responseMessage> {
+    const { macAddress } = linkIotUserDto;
+    const { id } = user;
 
     const checkIot = await this.prismaMysql.iot.findUnique({
       where: {
@@ -77,7 +85,7 @@ export class IotService {
         mac_address: macAddress,
       },
       data: {
-        user_id: userId,
+        user_id: id,
       },
     });
 
@@ -88,9 +96,10 @@ export class IotService {
 
   async softResetIot(
     softResetIotDto: softResetIotDto,
-  ): Promise<responseSoftResetIotDto> {
-    const { macAddress, userId } = softResetIotDto;
-
+    user: UserPayloadDto,
+  ): Promise<responseMessage> {
+    const { macAddress } = softResetIotDto;
+    const { id } = user;
     const iot = await this.prismaMysql.iot.findUnique({
       where: { mac_address: macAddress },
     });
@@ -111,7 +120,7 @@ export class IotService {
 
     await this.prismaMysql.iot.update({
       where: { id: iot.id },
-      data: { user_id: userId },
+      data: { user_id: id },
     });
 
     return {
@@ -120,12 +129,12 @@ export class IotService {
   }
 
   async getDeviceHistory(
-    iotId: number,
-    userId: number,
-    startDate: string,
-    endDate: string,
+    dto: GetHistoryDto,
+    user: UserPayloadDto,
   ): Promise<ResponseHistoryLightweightDto> {
-    // 1. Validar ownership en MySQL
+    const { startDate, endDate, iotId } = dto;
+    const { id } = user;
+
     const device = await this.prismaMysql.iot.findUnique({
       where: { id: iotId },
     });
@@ -134,15 +143,10 @@ export class IotService {
       throw new BadRequestException('Device not found');
     }
 
-    // Permitir si es el dueño O si es admin (roles se manejan en guards, aquí asumimos que ya pasó auth)
-    // Pero necesitamos validar que el usuario que pide sea el dueño si no es admin.
-    // Como el controller pasará el userId del token, validamos aquí:
-    if (device.user_id !== userId) {
-      // TODO: Si implementamos roles, checar si es admin. Por ahora estricto dueño.
+    if (device.user_id !== id) {
       throw new ConflictException('You do not own this device');
     }
 
-    // 2. Buscar en MongoDB
     const start = new Date(startDate);
     const end = new Date(endDate);
 
@@ -154,8 +158,6 @@ export class IotService {
         },
       },
     });
-
-    // Definir columnas fijas
     const columns = [
       'timestamp',
       'voltaje',
@@ -171,16 +173,14 @@ export class IotService {
       };
     }
 
-    // 3. Filtrar y Mapear en memoria para formato Lightweight (Columnar)
-
     const data = mongoTelemetry.readings
       .filter((r) => r.timestamp >= start && r.timestamp <= end)
       .map((r) => [
-        r.timestamp, // timestamp
-        r.electricas.voltaje_v, // voltaje
-        r.electricas.corriente_a, // corriente
-        r.electricas.potencia_w, // potencia
-        r.electricas.energia_kwh, // energia
+        r.timestamp,
+        r.electricas.voltaje_v,
+        r.electricas.corriente_a,
+        r.electricas.potencia_w,
+        r.electricas.energia_kwh,
       ]);
 
     return {

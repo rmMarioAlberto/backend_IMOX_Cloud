@@ -8,13 +8,13 @@ import { RedisService } from '../redis/redis.service';
 import {
   LoginUserDto,
   LoginResponseDto,
-  LogoutResponseDto,
   RefreshTokenDto,
   RefreshTokenResponseDto,
   RequestResetPasswordDto,
   ResetPasswordDto,
   ResetPasswordResponseDto,
 } from './dto/auth.dto';
+import { responseMessage } from '../../common/utils/dto/utils.dto';
 import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from './jwt.service';
@@ -33,7 +33,7 @@ export class AuthService {
     const { email, password } = loginUserDto;
 
     const user = await this.prismaService.users.findUnique({
-      where: { email },
+      where: { email, status: 1 },
     });
 
     if (!user) {
@@ -46,17 +46,13 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    if (user.status !== 1) {
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
-
     const deviceId = loginUserDto.deviceId || 'mobile_app_default';
 
     const payload = {
       sub: user.id,
       email: user.email,
       role: user.role,
-      deviceId, // Importante para validar luego
+      deviceId,
     };
 
     const accessToken = await this.jwtService.generateAccessToken(payload);
@@ -80,7 +76,7 @@ export class AuthService {
     userId: number,
     deviceId: string | undefined,
     accessToken?: string,
-  ): Promise<LogoutResponseDto> {
+  ): Promise<responseMessage> {
     const targetDevice = deviceId || 'mobile_app_default';
     await this.redisService.deleteRefreshToken(userId, targetDevice);
 

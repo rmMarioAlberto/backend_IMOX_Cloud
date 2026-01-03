@@ -101,18 +101,6 @@ export class LogoutUserDto {
   deviceId?: string;
 }
 
-@Exclude()
-export class LogoutResponseDto {
-  @ApiProperty({
-    example: 'Sesión cerrada exitosamente',
-    description: 'Mensaje de confirmación',
-  })
-  @IsString()
-  @IsNotEmpty()
-  @Expose()
-  message: string;
-}
-
 export class RefreshTokenDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',

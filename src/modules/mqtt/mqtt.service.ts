@@ -25,11 +25,15 @@ export class MqttService implements OnModuleInit {
   private async connectToBroker() {
     const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
     const clientId = process.env.MQTT_CLIENT_ID || 'imox_backend';
+    const username = process.env.MQTT_USER;
+    const password = process.env.MQTT_PASSWORD;
 
     this.logger.log(`Conectando al broker MQTT: ${brokerUrl}`);
 
     this.client = mqtt.connect(brokerUrl, {
       clientId,
+      username,
+      password,
       clean: true,
       reconnectPeriod: 5000,
       connectTimeout: 30000,

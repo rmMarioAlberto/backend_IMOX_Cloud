@@ -65,3 +65,7 @@ docker/mqtt/log/
 
 # Prisma generated
 generated
+
+# MQTT Secrets
+docker/mqtt/password_file
+docker/mqtt/acl_file

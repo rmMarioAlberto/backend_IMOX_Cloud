@@ -5,7 +5,6 @@ import {
   HttpStatus,
   Body,
   UseGuards,
-  BadRequestException,
   Param,
 } from '@nestjs/common';
 import { IotService } from './iot.service';
@@ -13,12 +12,12 @@ import {
   createIotDto,
   linkIotUserDto,
   responseIotDto,
-  responseLinkIotUserDto,
-  responseSoftResetIotDto,
   softResetIotDto,
   GetHistoryDto,
   ResponseHistoryLightweightDto,
 } from './dto/iot.dto';
+import { UserPayloadDto } from '../auth/dto/auth.dto';
+import { responseMessage } from '../../common/utils/dto/utils.dto';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -60,50 +59,54 @@ export class IotController {
 
   @Post('link')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Link an IoT device to a user' })
+  @ApiOperation({ summary: 'Link an IoT device to a user (private)' })
   @ApiCreatedResponse({
     description: 'The IoT device has been successfully linked.',
-    type: responseLinkIotUserDto,
+    type: responseMessage,
   })
   @ApiBadRequestResponse({ description: 'Device not found or invalid data.' })
   @ApiConflictResponse({ description: 'Device already linked to a user.' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   linkUserIot(
     @Body() linkIotUserDto: linkIotUserDto,
-  ): Promise<responseLinkIotUserDto> {
-    return this.iotService.linkIotUser(linkIotUserDto);
+    @GetUser() user: UserPayloadDto,
+  ): Promise<responseMessage> {
+    return this.iotService.linkIotUser(linkIotUserDto, user);
   }
 
   @Post('soft-reset')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Soft reset an IoT device' })
+  @ApiOperation({ summary: 'Soft reset an IoT device(private)' })
   @ApiCreatedResponse({
     description: 'The IoT device has been successfully soft reset.',
-    type: responseSoftResetIotDto,
+    type: responseMessage,
   })
   @ApiBadRequestResponse({ description: 'Device not found or invalid data.' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   softResetIot(
     @Body() softResetIotDto: softResetIotDto,
-  ): Promise<responseSoftResetIotDto> {
-    return this.iotService.softResetIot(softResetIotDto);
+    @GetUser() user: UserPayloadDto,
+  ): Promise<responseMessage> {
+    return this.iotService.softResetIot(softResetIotDto, user);
   }
 
-  @Post(':id/history')
+  @Post('history')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get historical telemetry data for charts' })
+  @ApiOperation({
+    summary: 'Get historical telemetry data for charts (private)',
+  })
   @ApiOkResponse({
     description: 'Historical readings in lightweight format (columns + data).',
     type: ResponseHistoryLightweightDto,
   })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   async getHistory(
-    @Param('id') id: string,
     @Body() getHistoryDto: GetHistoryDto,
-    @GetUser() user: any,
+    @GetUser() user: UserPayloadDto,
   ): Promise<ResponseHistoryLightweightDto> {
-    return this.iotService.getDeviceHistory(
-      Number(id),
-      user.sub,
-      getHistoryDto.startDate,
-      getHistoryDto.endDate,
-    );
+    return this.iotService.getDeviceHistory(getHistoryDto, user);
   }
 }

@@ -1,7 +1,8 @@
 generator client {
-  provider     = "prisma-client-js"
-  output       = "../../../generated/prismaMongo"
-  moduleFormat = "cjs"
+  provider      = "prisma-client-js"
+  output        = "../../../generated/prismaMongo"
+  binaryTargets = ["native", "linux-musl"]
+  moduleFormat  = "cjs"
 }
 
 datasource db {
@@ -10,24 +11,24 @@ datasource db {
 }
 
 model Telemetry {
-  id        String    @id @default(auto()) @map("_id") @db.ObjectId
-  iotId     Int       @map("iot_id")
-  userId    Int       @map("user_id")
-  
-  readings  Reading[]
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  iotId  Int    @map("iot_id")
+  userId Int    @map("user_id")
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  readings Reading[]
 
-  @@map("telemetry")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@unique([iotId, userId])
+  @@map("telemetry")
 }
 
 type Reading {
-  type         String         // "normal" | "critical"
-  electricas   ElectricalData
-  diagnostico  DiagnosticData
-  timestamp    DateTime @default(now())
+  type        String // "normal" | "critical"
+  electricas  ElectricalData
+  diagnostico DiagnosticData
+  timestamp   DateTime       @default(now())
 }
 
 type ElectricalData {
