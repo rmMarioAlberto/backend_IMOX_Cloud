@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { createClient, RedisClientType } from 'redis';
+import { MqttTelemetryDto } from '../mqtt/dto/mqtt.dto';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
@@ -60,7 +61,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    */
   async setTelemetryLast(
     iotId: number,
-    data: any,
+    data: MqttTelemetryDto,
     ttl: number = 600,
   ): Promise<void> {
     const key = `iot:${iotId}:last`;
@@ -70,7 +71,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /**
    * Obtener última lectura de telemetría
    */
-  async getTelemetryLast(iotId: number): Promise<any | null> {
+  async getTelemetryLast(iotId: number): Promise<MqttTelemetryDto | null> {
     const key = `iot:${iotId}:last`;
     const data = await this.client.get(key);
     return data ? JSON.parse(data) : null;
@@ -79,7 +80,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /**
    * Agregar evento crítico al buffer
    */
-  async pushCriticalEvent(iotId: number, data: any): Promise<void> {
+  async pushCriticalEvent(
+    iotId: number,
+    data: MqttTelemetryDto,
+  ): Promise<void> {
     const key = `iot:${iotId}:critical_buffer`;
     await this.client.lPush(key, JSON.stringify(data));
     // Limitar a últimos 100 eventos
@@ -91,7 +95,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /**
    * Obtener todos los eventos críticos del buffer
    */
-  async getCriticalEvents(iotId: number): Promise<any[]> {
+  async getCriticalEvents(iotId: number): Promise<MqttTelemetryDto[]> {
     const key = `iot:${iotId}:critical_buffer`;
     const events = await this.client.lRange(key, 0, -1);
     return events.map((e) => JSON.parse(e));
@@ -110,7 +114,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    */
   async setBaseline(
     iotId: number,
-    data: any,
+    data: MqttTelemetryDto,
     ttl: number = 3600,
   ): Promise<void> {
     const key = `iot:${iotId}:baseline`;
@@ -120,7 +124,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /**
    * Obtener baseline
    */
-  async getBaseline(iotId: number): Promise<any | null> {
+  async getBaseline(iotId: number): Promise<MqttTelemetryDto | null> {
     const key = `iot:${iotId}:baseline`;
     const data = await this.client.get(key);
     return data ? JSON.parse(data) : null;

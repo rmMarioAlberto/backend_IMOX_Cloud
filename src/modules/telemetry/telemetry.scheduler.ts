@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { RedisService } from '../redis/redis.service';
 import { PrismaMongoService } from '../prisma/prisma-mongo.service';
 import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
+import { TelemetryReadingDto } from './dto/telemetry-reading.dto';
 
 @Injectable()
 export class TelemetryScheduler {
@@ -27,21 +28,14 @@ export class TelemetryScheduler {
       for (const key of deviceKeys) {
         const iotId = this.extractIotId(key);
 
-        // Obtener última lectura normal
         const lastReading = await this.redisService.getTelemetryLast(iotId);
 
-        // Obtener eventos críticos acumulados
         const criticalEvents = await this.redisService.getCriticalEvents(iotId);
 
-        // Si no hay ni lectura normal ni críticos, saltar
         if (!lastReading && criticalEvents.length === 0) {
-          this.logger.debug(
-            `Dispositivo ${iotId} sin datos en Redis, saltando...`,
-          );
           continue;
         }
 
-        // Obtener userId desde la BD
         const device = await this.prismaMysql.iot.findUnique({
           where: { id: iotId },
           select: { user_id: true },
@@ -54,36 +48,51 @@ export class TelemetryScheduler {
           continue;
         }
 
-        // Preparar lecturas a guardar
-        const readings: any[] = [];
+        const readings: TelemetryReadingDto[] = [];
 
-        // Agregar eventos críticos primero (solo campos válidos de Reading)
         for (const event of criticalEvents) {
           readings.push({
             type: 'critical',
-            electricas: event.electricas,
+            anomaly_type: event.anomaly_type,
+            electricas: {
+              voltaje_v: event.electricas?.voltaje_v ?? null,
+              corriente_a: event.electricas?.corriente_a ?? null,
+              potencia_w: event.electricas?.potencia_w ?? null,
+              energia_kwh: event.electricas?.energia_kwh ?? null,
+              frecuencia_hz: event.electricas?.frecuencia_hz ?? null,
+              factor_potencia: event.electricas?.factor_potencia ?? null,
+            },
             diagnostico: {
-              ip: event.diagnostico?.ip || 'unknown',
-              rssi_dbm: event.diagnostico?.rssi_dbm || 0,
-              pzem_status: event.diagnostico?.pzem_status || 'unknown',
-              uptime_s: event.diagnostico?.uptime_s || 0,
-              ...event.diagnostico, // Mantiene cualquier otro campo si existe
+              ip: event.diagnostico?.ip ?? 'unknown',
+              rssi_dbm: event.diagnostico?.rssi_dbm ?? 0,
+              pzem_status: event.diagnostico?.pzem_status ?? 'unknown',
+              uptime_s: event.diagnostico?.uptime_s ?? 0,
             },
             timestamp: new Date(event.timestamp || Date.now()),
           });
         }
 
-        // Agregar lectura normal solo si existe
         if (lastReading) {
           readings.push({
             type: 'normal',
-            electricas: lastReading.electricas,
-            diagnostico: lastReading.diagnostico,
+            electricas: {
+              voltaje_v: lastReading.electricas?.voltaje_v ?? null,
+              corriente_a: lastReading.electricas?.corriente_a ?? null,
+              potencia_w: lastReading.electricas?.potencia_w ?? null,
+              energia_kwh: lastReading.electricas?.energia_kwh ?? null,
+              frecuencia_hz: lastReading.electricas?.frecuencia_hz ?? null,
+              factor_potencia: lastReading.electricas?.factor_potencia ?? null,
+            },
+            diagnostico: {
+              ip: lastReading.diagnostico?.ip ?? 'unknown',
+              rssi_dbm: lastReading.diagnostico?.rssi_dbm ?? 0,
+              pzem_status: lastReading.diagnostico?.pzem_status ?? 'unknown',
+              uptime_s: lastReading.diagnostico?.uptime_s ?? 0,
+            },
             timestamp: new Date(),
           });
         }
 
-        // Solo guardar si hay algo que persistir
         if (readings.length === 0) {
           continue;
         }
@@ -108,10 +117,6 @@ export class TelemetryScheduler {
         });
 
         await this.redisService.clearCriticalEvents(iotId);
-
-        this.logger.debug(
-          `Guardando ${readings.length} lecturas para dispositivo ${iotId} (${criticalEvents.length} críticos + ${lastReading ? '1 normal' : '0 normal'})`,
-        );
       }
 
       this.logger.log(
@@ -159,7 +164,7 @@ export class TelemetryScheduler {
         }
       }
     } catch (error) {
-      this.logger.error('❌ Error en health check:', error);
+      this.logger.error('Error en health check:', error);
     }
   }
 

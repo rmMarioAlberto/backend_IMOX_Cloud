@@ -13,6 +13,8 @@ import { JwtService } from '../auth/jwt.service';
 import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
 import { RedisService } from '../redis/redis.service';
 import { PrismaMongoService } from '../prisma/prisma-mongo.service';
+import { TelemetryResponseDto } from './dto/telemetry-response.dto';
+import { toTelemetryResponse } from './utils/telemetry.mapper';
 
 @WebSocketGateway({
   cors: {
@@ -37,7 +39,6 @@ export class TelemetryGateway
 
   async handleConnection(client: Socket) {
     try {
-      // 1. Obtener token de headers, auth payload o query string
       const token =
         client.handshake.auth?.token ||
         client.handshake.headers.authorization?.split(' ')[1];
@@ -48,10 +49,8 @@ export class TelemetryGateway
         return;
       }
 
-      // 2. Verificar token
       const payload = await this.jwtService.verifyToken(token);
 
-      // 3. Guardar info de usuario en el socket
       client.data.user = payload;
 
       this.logger.log(`Cliente conectado: ${client.id} (User: ${payload.sub})`);
@@ -80,7 +79,6 @@ export class TelemetryGateway
         return;
       }
 
-      // Validar propiedad del dispositivo
       const device = await this.prismaMysql.iot.findUnique({
         where: { id: iotId },
         select: { user_id: true },
@@ -91,11 +89,9 @@ export class TelemetryGateway
         return;
       }
 
-      // Permitir si es el dueño (user_id match) O si es ADMIN (role === 1)
       const isOwner = device.user_id === user.sub;
-      const isAdmin = user.role === 1;
 
-      if (!isOwner && !isAdmin) {
+      if (!isOwner) {
         this.logger.warn(
           `Acceso denegado: Usuario ${user.sub} intentó suscribirse a dispositivo ${iotId}`,
         );
@@ -108,17 +104,17 @@ export class TelemetryGateway
 
       const roomName = `device:${iotId}`;
       client.join(roomName);
-      this.logger.debug(
-        `Cliente ${client.id} (User ${user.sub}) suscrito a ${roomName}`,
-      );
 
-      // --- Enviar Estada Inicial (Last Known Value) ---
-      // 1. Intentar desde Redis (Más rápido)
-      let lastTelemetry = await this.redisService.getTelemetryLast(iotId);
+      let lastTelemetry: TelemetryResponseDto | null = null;
+      const redisData = await this.redisService.getTelemetryLast(iotId);
 
-      // 2. Fallback a MongoDB si no hay en Redis
-      if (!lastTelemetry && device.user_id) {
-        this.logger.debug(`Redis vacío para ${iotId}, buscando en MongoDB...`);
+      if (redisData) {
+        lastTelemetry = toTelemetryResponse(
+          redisData,
+          false,
+          redisData.anomaly_type,
+        );
+      } else if (device.user_id) {
         const mongoTelemetry = await this.prismaMongo.telemetry.findUnique({
           where: {
             iotId_userId: {
@@ -129,29 +125,29 @@ export class TelemetryGateway
         });
 
         if (mongoTelemetry && mongoTelemetry.readings.length > 0) {
-          // Obtener la lectura más reciente (asumiendo que se guardan en orden o buscar la última)
-          // Nota: Array.at(-1) es la última insertada
           const lastReading = mongoTelemetry.readings.at(-1);
           if (lastReading) {
-            lastTelemetry = {
-              ...lastReading.electricas,
-              is_critical: lastReading.type === 'critical',
+            const mqttDto = {
+              electricas: lastReading.electricas,
+              diagnostico: lastReading.diagnostico,
               timestamp: lastReading.timestamp.toISOString(),
-              // Mapear otros campos si es necesario
             } as any;
+
+            lastTelemetry = toTelemetryResponse(
+              mqttDto,
+              lastReading.type === 'critical',
+              lastReading.anomaly_type as
+                | 'SPIKE'
+                | 'LIMIT'
+                | 'NONE'
+                | undefined,
+            );
           }
         }
       }
 
       if (lastTelemetry) {
-        this.logger.debug(
-          `Enviando estado inicial (LKV) a cliente ${client.id} para dispositivo ${iotId}`,
-        );
         client.emit('telemetry', lastTelemetry);
-      } else {
-        this.logger.debug(
-          `No hay historial disponible para dispositivo ${iotId} (Redis ni MongoDB)`,
-        );
       }
 
       return { event: 'subscribed', data: { room: roomName } };
@@ -176,11 +172,7 @@ export class TelemetryGateway
     return { event: 'unsubscribed', data: { room: roomName } };
   }
 
-  /**
-   * Método para emitir datos de telemetría a una sala específica
-   * Se llama desde MqttService
-   */
-  broadcastTelemetry(iotId: number, data: any) {
+  broadcastTelemetry(iotId: number, data: TelemetryResponseDto) {
     this.server.to(`device:${iotId}`).emit('telemetry', data);
   }
 }

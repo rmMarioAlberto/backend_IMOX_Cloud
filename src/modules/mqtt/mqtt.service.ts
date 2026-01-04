@@ -5,6 +5,10 @@ import { RedisService } from '../redis/redis.service';
 import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
 import { SpikeDetectorService } from '../telemetry/spike-detector.service';
 import { TelemetryGateway } from '../telemetry/telemetry.gateway';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { MqttTelemetryDto } from './dto/mqtt.dto';
+import { toTelemetryResponse } from '../telemetry/utils/telemetry.mapper';
 
 @Injectable()
 export class MqttService implements OnModuleInit {
@@ -70,12 +74,25 @@ export class MqttService implements OnModuleInit {
 
   private async handleMessage(topic: string, payload: Buffer) {
     try {
-      const data = JSON.parse(payload.toString());
+      const rawData = JSON.parse(payload.toString());
       const iotId = this.extractIotIdFromTopic(topic);
+
+      const data = plainToInstance(MqttTelemetryDto, rawData, {
+        excludeExtraneousValues: true,
+      });
+
+      const errors = await validate(data);
+      if (errors.length > 0) {
+        this.logger.warn(
+          `Datos inválidos recibidos de dispositivo ${iotId}: ${JSON.stringify(
+            errors,
+          )}`,
+        );
+        return;
+      }
 
       this.logger.debug(`Mensaje recibido de dispositivo ${iotId}`);
 
-      // Validar que el dispositivo exista y esté activo lógicamente
       const device = await this.prismaMysql.iot.findUnique({
         where: { id: iotId },
       });
@@ -90,7 +107,6 @@ export class MqttService implements OnModuleInit {
         return;
       }
 
-      // Actualizar última conexión (marca como "online")
       await this.prismaMysql.iot.update({
         where: { id: iotId },
         data: {
@@ -99,20 +115,23 @@ export class MqttService implements OnModuleInit {
         },
       });
 
-      // 1. Guardar última lectura en Redis
       await this.redisService.setTelemetryLast(iotId, data);
 
       const baseline = await this.redisService.getBaseline(iotId);
 
-      // Validar que el baseline tenga la estructura correcta (evitar error con datos antiguos)
       const isBaselineValid = baseline && baseline.electricas;
 
-      const isCritical = isBaselineValid
-        ? this.spikeDetector.detectSpike(data, baseline)
-        : false;
+      const anomalyResult: any = isBaselineValid
+        ? this.spikeDetector.detectAnomaly(data, baseline)
+        : { isCritical: false, type: 'NONE' };
 
-      if (isCritical) {
-        this.logger.warn(`Pico detectado en dispositivo ${iotId}`);
+      if (anomalyResult.isCritical) {
+        this.logger.warn(
+          `Anomalía en dispositivo ${iotId} (${anomalyResult.type}): ${anomalyResult.message}`,
+        );
+
+        data.anomaly_type = anomalyResult.type;
+
         await this.redisService.pushCriticalEvent(iotId, data);
       } else {
         await this.redisService.setBaseline(iotId, data);
@@ -122,11 +141,10 @@ export class MqttService implements OnModuleInit {
         await this.redisService.setBaseline(iotId, data);
       }
 
-      // Emitir a WebSocket Gateway en tiempo real
-      this.telemetryGateway.broadcastTelemetry(iotId, {
-        ...data,
-        is_critical: isCritical,
-      });
+      this.telemetryGateway.broadcastTelemetry(
+        iotId,
+        toTelemetryResponse(data, anomalyResult.isCritical, anomalyResult.type),
+      );
     } catch (error) {
       this.logger.error('Error procesando mensaje MQTT:', error);
     }

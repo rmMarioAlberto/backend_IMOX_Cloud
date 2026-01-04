@@ -25,19 +25,20 @@ model Telemetry {
 }
 
 type Reading {
-  type        String // "normal" | "critical"
-  electricas  ElectricalData
-  diagnostico DiagnosticData
-  timestamp   DateTime       @default(now())
+  type         String // "normal" | "critical"
+  anomaly_type String? // "SPIKE" | "LIMIT"
+  electricas   ElectricalData
+  diagnostico  DiagnosticData
+  timestamp    DateTime       @default(now())
 }
 
 type ElectricalData {
-  voltaje_v       Float
-  corriente_a     Float
-  potencia_w      Float
-  energia_kwh     Float
-  frecuencia_hz   Float
-  factor_potencia Float
+  voltaje_v       Float?
+  corriente_a     Float?
+  potencia_w      Float?
+  energia_kwh     Float?
+  frecuencia_hz   Float?
+  factor_potencia Float?
 }
 
 type DiagnosticData {
