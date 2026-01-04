@@ -46,6 +46,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   // Iniciar el servidor
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.NESTJS_PORT ?? process.env.PORT ?? 3000;
+  await app.listen(port);
 }
 bootstrap();

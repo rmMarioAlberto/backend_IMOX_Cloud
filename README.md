@@ -1,169 +1,112 @@
-# Backend IMOX Cloud
+# Backend IMO X Cloud
 
-Sistema backend para el proyecto IMOX Cloud - Monitoreo de consumo eléctrico en tiempo real.
+Este es el backend para la plataforma IoT IMO X Cloud, construido con NestJS.
 
-## 🏗️ Arquitectura
+## Requisitos
 
-El proyecto utiliza una arquitectura de microservicios orquestada con Docker Compose:
+- Node.js v18+
+- Docker & Docker Compose
+- MySQL
+- MongoDB
+- Redis
+- MQTT Broker (Mosquitto)
 
-- **Nest.js**: API REST y lógica de negocio
-- **MongoDB**: Base de datos para telemetría y datos de sensores
-- **PostgreSQL**: Base de datos para autenticación y usuarios
-- **Mosquitto MQTT**: Broker para comunicación con dispositivos IoT
-- **GlitchTip**: Sistema de monitoreo de errores y logging
+## Configuración y Variables de Entorno
 
-## 📋 Prerequisitos
-
-- Docker >= 20.10
-- Docker Compose >= 2.0
-- Node.js >= 20 (solo para desarrollo local sin Docker)
-
-## 🚀 Inicio Rápido
-
-### 1. Configuración inicial
+Copia el archivo de ejemplo para crear tu configuración local:
 
 ```bash
-# Clonar el repositorio
-cd backend_IMOX_Cloud
-
-# Copiar archivo de configuración
 cp .env.example .env
-
-# Editar .env con tus valores (opcional para desarrollo)
-nano .env
 ```
 
-### 2. Levantar todos los servicios
+### Variables Importantes
 
-```bash
-# Dar permisos de ejecución a los scripts
-chmod +x scripts/*.sh
+| Variable                        | Descripción                  | Valor por Defecto                      |
+| :------------------------------ | :--------------------------- | :------------------------------------- |
+| `NESTJS_PORT`                   | Puerto de la aplicación      | `3000`                                 |
+| `DATABASE_URL_MONGO`            | Conexión MongoDB             | `mongodb://localhost:27017/imox_mongo` |
+| `MYSQL_URL`                     | Conexión MySQL               | `mysql://...`                          |
+| `REDIS_URL`                     | Conexión Redis               | `redis://...`                          |
+| `MQTT_BROKER_URL`               | URL del Broker MQTT          | `mqtt://localhost:1883`                |
+| `TELEMETRY_SPIKE_THRESHOLD`     | Umbral % para detectar picos | `0.15` (15%)                           |
+| `TELEMETRY_VOLTAGE_MAX`         | Voltaje Máximo Absoluto      | `140`                                  |
+| `TELEMETRY_VOLTAGE_MIN`         | Voltaje Mínimo Absoluto      | `90`                                   |
+| `TELEMETRY_OFFLINE_TIMEOUT_MIN` | Minutos para marcar offline  | `10`                                   |
 
-# Iniciar todos los servicios en desarrollo
-./scripts/start-dev.sh
-```
+### Generar Contraseña Segura para MQTT
 
-### 3. Verificar que todo funciona
+Para producción, debes generar una contraseña hasheada para el archivo `password_file` de Mosquitto:
 
-```bash
-# Ver logs en tiempo real
-./scripts/logs.sh
+1. **Generar Hash**:
 
-# Ver logs de un servicio específico
-./scripts/logs.sh nestjs
-./scripts/logs.sh mosquitto
-```
-
-## 🔗 URLs de Acceso
-
-| Servicio           | URL                   | Descripción              |
-| ------------------ | --------------------- | ------------------------ |
-| **Backend API**    | http://localhost:3000 | API REST Nest.js         |
-| **GlitchTip**      | http://localhost:8000 | Dashboard de errores     |
-| **MongoDB**        | localhost:27017       | Base de datos telemetría |
-| **PostgreSQL**     | localhost:5432        | Base de datos auth       |
-| **MQTT TCP**       | localhost:1883        | Broker MQTT              |
-| **MQTT WebSocket** | ws://localhost:9001   | MQTT vía WebSocket       |
-
-## 📦 Servicios Individuales
-
-### Comandos útiles
-
-```bash
-# Ver estado de todos los servicios
-cd docker && docker-compose ps
-
-# Reiniciar un servicio específico
-cd docker && docker-compose restart nestjs
-
-# Ver logs de un servicio
-./scripts/logs.sh [servicio]
-
-# Detener todos los servicios
-./scripts/stop-all.sh
-
-# Detener y eliminar volúmenes (⚠️ BORRA DATOS)
-./scripts/stop-all.sh --remove-volumes
-```
-
-### Reconstruir imágenes
-
-```bash
-cd docker
-docker-compose build
-docker-compose up -d
-```
-
-## 🗂️ Estructura del Proyecto
-
-```
-backend_IMOX_Cloud/
-├── docker/                          # Configuración Docker
-│   ├── docker-compose.yml          # Orquestación de servicios
-│   ├── nestjs/Dockerfile           # Build de Nest.js
-│   └── mqtt/mosquitto.conf         # Config MQTT
-├── src/                            # Código fuente
-│   ├── modules/
-│   │   ├── auth/                   # Autenticación (RF-B-01 a RF-B-04)
-│   │   ├── devices/                # Dispositivos (RF-B-05, RF-B-06)
-│   │   ├── telemetry/              # Telemetría (RF-B-07, RF-B-08)
-│   │   └── mqtt/                   # MQTT (RF-B-09, RF-B-10)
-│   └── main.ts
-├── scripts/                        # Scripts de automatización
-│   ├── start-dev.sh               # Iniciar todo
-│   ├── stop-all.sh                # Detener todo
-│   └── logs.sh                    # Ver logs
-└── .env                           # Variables de entorno (git-ignored)
-```
-
-## 🔧 Configuración de GlitchTip
-
-1. Acceder a http://localhost:8000
-2. Crear cuenta de administrador
-3. Crear un nuevo proyecto "IMOX Backend"
-4. Copiar el DSN del proyecto
-5. Agregar el DSN al archivo `.env`:
    ```bash
-   GLITCHTIP_DSN=https://xxx@localhost:8000/1
+   node tools/hash_mqtt_password.js "TU_CONTRASEÑA_SEGURA"
    ```
 
-## 🔐 Seguridad en Producción
+2. **Copiar Resultado**:
+   El script imprimirá una línea como `backend_admin:$2b$10$...`.
 
-Antes de desplegar en producción, asegúrate de:
+3. **Guardar en Archivo**:
+   Copia esa línea en `mosquitto/config/password_file` (crea el archivo si no existe dentro de la carpeta raíz o docker config).
 
-1. ✅ Cambiar todas las contraseñas en `.env`
-2. ✅ Generar un nuevo `JWT_SECRET` (mínimo 32 caracteres)
-3. ✅ Generar `GLITCHTIP_SECRET_KEY`: `openssl rand -hex 50`
-4. ✅ Configurar autenticación en Mosquitto (editar `mosquitto.conf`)
-5. ✅ Habilitar HTTPS/TLS para todos los servicios
-6. ✅ Configurar firewall y limitar puertos expuestos
+4. **Actualizar .env**:
+   Asegúrate de que `MQTT_PASSWORD` en tu `.env` coincida con la contraseña original (sin hashear).
 
-## 🐛 Troubleshooting
+## Docker (Recomendado para Desarrollo)
 
-### Puerto ya en uso
+Para iniciar toda la infraestructura (Bases de datos, Redis, MQTT, GlitchTip) sin instalar nada localmente:
 
-```bash
-# Verificar qué está usando el puerto
-lsof -i :3000
+1. **Generar Archivos de Configuración**:
+   Asegúrate de tener los archivos `acl_file`, `password_file` y `mosquitto.conf` en la carpeta `mosquitto/config`.
 
-# Detener todos los contenedores
-./scripts/stop-all.sh
-```
+2. **Iniciar Contenedores**:
 
-### Problemas de permisos
+   ```bash
+   docker-compose up -d
+   ```
 
-```bash
-# Dar permisos a scripts
-chmod +x scripts/*.sh
+3. **Verificar Logs**:
 
-# Dar permisos a volúmenes de MQTT
-sudo chown -R 1883:1883 docker/volumes/mosquitto/
-```
+   ```bash
+   docker-compose logs -f
+   ```
 
-### Reset completo
+4. **Detener Contenedores**:
+   ```bash
+   docker-compose down
+   ```
 
-```bash
-# Detener y eliminar TODO (⚠️ BORRA DATOS)
-./scripts/stop-all.sh --remove-volumes
-./scripts/start-dev.sh
-```
+## Ejecución Local
+
+1. **Instalar Dependencias**:
+
+   ```bash
+   npm install
+   ```
+
+2. **Generar Clientes Prisma**:
+
+   ```bash
+   npx prisma generate --schema src/database/prisma/schemaMongo.prisma
+   npx prisma generate --schema src/database/prisma/schemaMysql.prisma
+   ```
+
+3. **Iniciar en Desarrollo**:
+
+   ```bash
+   npm run start:dev
+   ```
+
+4. **Iniciar en Producción**:
+   ```bash
+   npm run build
+   npm run start:prod
+   ```
+
+## Funcionalidades Principales
+
+- **API REST**: Autenticación, Gestión de Dispositivos.
+- **WebSocket Gateway**: Telemetría en tiempo real (`/telemetry`).
+- **MQTT**: Ingesta de datos de sensores.
+- **Spike Detection**: Detección de anomalías de voltaje.
+- **Health Check**: Monitoreo de estado online/offline de dispositivos.
