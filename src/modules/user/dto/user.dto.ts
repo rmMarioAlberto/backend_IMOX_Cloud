@@ -1,13 +1,10 @@
 import {
   IsEmail,
-  isNotEmpty,
   IsNotEmpty,
   IsNumber,
   IsString,
   MaxLength,
-  Min,
   MinLength,
-  IsArray,
 } from 'class-validator';
 import { Exclude, Expose } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -55,7 +52,7 @@ export class RegisterResponseDto {
 }
 
 @Exclude()
-export class responseGetProfileDto {
+export class ResponseGetProfileDto {
   @ApiProperty({ example: 1, description: 'ID único del usuario' })
   @Expose()
   @IsNotEmpty()
@@ -84,7 +81,7 @@ export class responseGetProfileDto {
   role: number;
 }
 
-export class editProfileDto {
+export class EditProfileDto {
   @ApiProperty({ example: 'carlos', description: 'username' })
   @IsNotEmpty()
   @IsString()

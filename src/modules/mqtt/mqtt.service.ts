@@ -1,8 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as mqtt from 'mqtt';
 import { MqttClient } from 'mqtt';
-import { RedisService } from '../redis/redis.service';
-import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
+import { TelemetryRedisService } from '../database/telemetry/telemetry-redis.service';
+import { MariaDbService } from '../database/mariadb.service';
 import { SpikeDetectorService } from '../telemetry/spike-detector.service';
 import { TelemetryGateway } from '../telemetry/telemetry.gateway';
 import { plainToInstance } from 'class-transformer';
@@ -16,8 +16,8 @@ export class MqttService implements OnModuleInit {
   private readonly logger = new Logger(MqttService.name);
 
   constructor(
-    private readonly redisService: RedisService,
-    private readonly prismaMysql: PrismaMysqlService,
+    private readonly redisService: TelemetryRedisService,
+    private readonly prismaMysql: MariaDbService,
     private readonly spikeDetector: SpikeDetectorService,
     private readonly telemetryGateway: TelemetryGateway,
   ) {}

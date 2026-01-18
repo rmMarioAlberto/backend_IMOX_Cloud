@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
-import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
+import { MariaDbService } from '../database';
 import { ConflictException } from '@nestjs/common';
 
 // iniciar mock de bcrypt para que no genere error de importación en el servicio
@@ -25,7 +25,7 @@ describe('UserService - Register', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserService,
-        { provide: PrismaMysqlService, useValue: mockPrismaService },
+        { provide: MariaDbService, useValue: mockPrismaService },
       ],
     }).compile();
 

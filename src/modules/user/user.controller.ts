@@ -15,8 +15,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import {
   RegisterUserDto,
   RegisterResponseDto,
-  responseGetProfileDto,
-  editProfileDto,
+  ResponseGetProfileDto,
+  EditProfileDto,
 } from './dto/user.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
 import { responseMessage } from '../../common/utils/dto/utils.dto';
@@ -68,7 +68,7 @@ export class UserController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Perfil obtenido exitosamente.',
-    type: responseGetProfileDto,
+    type: ResponseGetProfileDto,
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
@@ -78,7 +78,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   async getProfile(
     @GetUser() user: UserPayloadDto,
-  ): Promise<responseGetProfileDto> {
+  ): Promise<ResponseGetProfileDto> {
     return this.userService.getProfile(user);
   }
 
@@ -96,7 +96,7 @@ export class UserController {
     type: responseMessage,
   })
   async editProfile(
-    @Body() dto: editProfileDto,
+    @Body() dto: EditProfileDto,
     @GetUser() user: UserPayloadDto,
   ): Promise<responseMessage> {
     return this.userService.editProfile(dto, user.id);

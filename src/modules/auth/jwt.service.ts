@@ -30,13 +30,9 @@ export class JwtService {
    * Verifica la validez de un token y retorna su payload
    */
   async verifyToken(token: string): Promise<any> {
-    try {
-      return await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET,
-      });
-    } catch (error) {
-      throw error;
-    }
+    return await this.jwtService.verifyAsync(token, {
+      secret: process.env.JWT_SECRET,
+    });
   }
 
   /**

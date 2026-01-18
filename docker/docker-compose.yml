@@ -1,65 +1,11 @@
-# Configuraciones compartidas usando YAML anchors
-x-glitchtip-environment: &glitchtip-environment
-  DATABASE_URL: postgresql://postgres:postgres@glitchtip_postgres:5432/glitchtip
-  REDIS_URL: redis://glitchtip_redis:6379/0
-  SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-647517bc50393b855beed2579999715e3ccbf1ee98e03a25479b83edcfc331fd768ac9f663cea3781e86df571b93767978a2}
-  PORT: 8000
-  EMAIL_URL: consolemail://
-  GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-http://localhost:8000}
-  DEFAULT_FROM_EMAIL: noreply@imox.local
-  CELERY_WORKER_AUTOSCALE: "1,3"
-  ENABLE_OPEN_USER_REGISTRATION: "True"
+version: '3.8'
 
 services:
-  # ==================== BASE DE DATOS IMOX ====================
-
-  mongodb:
-    image: mongo:8.0
-    container_name: imox_mongodb
-    restart: unless-stopped
-    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
-    ports:
-      - "${MONGO_PORT:-27017}:27017"
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-    networks:
-      - imox_network
-    healthcheck:
-      test: [ "CMD", "mongosh", "--eval", "try { rs.status() } catch (err) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}) }" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  mysql:
-    image: mysql:8.0
-    container_name: imox_mysql
-    restart: unless-stopped
-    command: --default-authentication-plugin=mysql_native_password
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-admin123}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-imox_auth}
-      MYSQL_USER: ${MYSQL_USER:-imox_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-imox_pass}
-    ports:
-      - "${MYSQL_PORT:-3306}:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - imox_network
-    healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # ==================== MQTT BROKER ====================
-
   mosquitto:
     image: iegomez/mosquitto-go-auth:latest
     container_name: imox_mosquitto
     restart: unless-stopped
-
     ports:
       - "${MQTT_PORT:-1883}:1883"
       - "${MQTT_WS_PORT:-9001}:9001"
@@ -69,17 +15,80 @@ services:
       - ./mqtt/password_file:/etc/mosquitto/password_file
       - mosquitto_data:/mosquitto/data
       - mosquitto_logs:/mosquitto/log
-
     networks:
       - imox_network
     healthcheck:
-      test: [ "CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -u backend_admin -P backend_secure_password -W 3" ]
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -u backend_admin -P backend_secure_password -W 3 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # ==================== BACKEND NEST.JS ====================
+  # ==================== TIME SERIES DB (INFLUXDB) ====================
+  influxdb:
+    image: influxdb:2
+    container_name: imox_influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USER:-imox_admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:-imox_secure_password}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-imox_org}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-imox_bucket}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-my-super-secret-auth-token}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    networks:
+      - imox_network
+    healthcheck:
+      test: "curl -f http://localhost:8086/ping"
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
+  # ==================== RELATIONAL DB (MARIADB) ====================
+  mariadb:
+    image: mariadb:latest
+    container_name: imox_mariadb
+    restart: unless-stopped
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-admin123}
+      - MARIADB_DATABASE=${MYSQL_DATABASE:-imox_auth}
+      - MARIADB_USER=${MYSQL_USER:-imox_user}
+      - MARIADB_PASSWORD=${MYSQL_PASSWORD:-imox_pass}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - imox_network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ==================== REDIS (CACHE/SESSION) ====================
+  redis:
+    image: redis:7-alpine
+    container_name: imox_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_change_in_production}
+    volumes:
+      - redis_data:/data
+    networks:
+      - imox_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password_change_in_production}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ==================== NESTJS BACKEND ====================
   nestjs:
     build:
       context: ..
@@ -88,43 +97,42 @@ services:
     container_name: imox_nestjs
     restart: unless-stopped
     depends_on:
-      mongodb:
+      influxdb:
         condition: service_healthy
-      mysql:
+      mariadb:
         condition: service_healthy
       mosquitto:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "${NESTJS_PORT:-3000}:3000"
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
-
-      # MongoDB
-      MONGO_URI: mongodb://mongodb:27017/${MONGO_DATABASE:-imox_db}
-
-      # MySQL
-      MYSQL_HOST: mysql
+      
+      # Database Connections
+      MYSQL_HOST: mariadb
       MYSQL_PORT: 3306
       MYSQL_USER: ${MYSQL_USER:-imox_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-imox_pass}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-imox_auth}
-
-      # MQTT
-      MQTT_BROKER_URL: mqtt://mosquitto:1883
-      MQTT_CLIENT_ID: imox_backend
-
-      # Redis
+      
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password}
-
-      # GlitchTip (opcional hasta que se configure)
-      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
-
-      # JWT
-      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-in-production}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password_change_in_production}
+      
+      MQTT_BROKER_URL: mqtt://mosquitto:1883
+      
+      # InfluxDB (New)
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-my-super-secret-auth-token}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-imox_org}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-imox_bucket}
+      
+      # Legacy Variables (to be removed after code migration)
+      MONGO_URI: "mongodb://dummy:27017/db" # Placeholder to avoid immediate crash if checked
+      
     volumes:
       - ../src:/app/src
       - ../package.json:/app/package.json
@@ -134,115 +142,13 @@ services:
       - imox_network
     command: npm run start:dev
 
-  # ==================== REDIS (Sesiones y Caché) ====================
-
-  redis:
-    image: redis:7-alpine
-    container_name: imox_redis
-    restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - imox_network
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
-    healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ==================== GLITCHTIP (Error Tracking) ====================
-
-  glitchtip_postgres:
-    image: postgres:16-alpine
-    container_name: imox_glitchtip_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: glitchtip
-      POSTGRES_HOST_AUTH_METHOD: trust
-    volumes:
-      - glitchtip_postgres_data:/var/lib/postgresql/data
-    networks:
-      - imox_network
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  glitchtip_redis:
-    image: redis:7-alpine
-    container_name: imox_glitchtip_redis
-    restart: unless-stopped
-    networks:
-      - imox_network
-
-  glitchtip_migrate:
-    image: glitchtip/glitchtip
-    container_name: imox_glitchtip_migrate
-    depends_on:
-      glitchtip_postgres:
-        condition: service_healthy
-      glitchtip_redis:
-        condition: service_started
-    environment: *glitchtip-environment
-    command: "./bin/run-migrate.sh"
-    networks:
-      - imox_network
-
-  glitchtip_web:
-    image: glitchtip/glitchtip
-    container_name: imox_glitchtip_web
-    restart: unless-stopped
-    depends_on:
-      glitchtip_postgres:
-        condition: service_healthy
-      glitchtip_redis:
-        condition: service_started
-      glitchtip_migrate:
-        condition: service_completed_successfully
-    ports:
-      - "${GLITCHTIP_PORT:-8000}:8000"
-    environment: *glitchtip-environment
-    volumes:
-      - glitchtip_uploads:/code/uploads
-    networks:
-      - imox_network
-
-  glitchtip_worker:
-    image: glitchtip/glitchtip
-    container_name: imox_glitchtip_worker
-    restart: unless-stopped
-    command: ./bin/run-celery-with-beat.sh
-    depends_on:
-      glitchtip_postgres:
-        condition: service_healthy
-      glitchtip_redis:
-        condition: service_started
-      glitchtip_migrate:
-        condition: service_completed_successfully
-    environment: *glitchtip-environment
-    volumes:
-      - glitchtip_uploads:/code/uploads
-    networks:
-      - imox_network
-  # ==================== VOLUMES ====================
-
 volumes:
-  mongodb_data:
-  mongodb_config:
-  mysql_data:
+  mariadb_data:
+  influxdb_data:
+  influxdb_config:
   mosquitto_data:
   mosquitto_logs:
   redis_data:
-  glitchtip_postgres_data:
-  glitchtip_uploads:
-
-    # ==================== NETWORKS ====================
 
 networks:
   imox_network:

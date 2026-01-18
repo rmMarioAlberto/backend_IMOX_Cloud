@@ -4,7 +4,7 @@ import * as Brevo from '@getbrevo/brevo';
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private apiInstance: Brevo.TransactionalEmailsApi;
+  private readonly apiInstance: Brevo.TransactionalEmailsApi;
 
   constructor() {
     this.apiInstance = new Brevo.TransactionalEmailsApi();

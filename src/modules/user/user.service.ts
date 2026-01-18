@@ -6,25 +6,25 @@ import {
 import {
   RegisterUserDto,
   RegisterResponseDto,
-  responseGetProfileDto,
-  editProfileDto,
+  ResponseGetProfileDto,
+  EditProfileDto,
 } from './dto/user.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
-import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
+import { MariaDbService } from '../database/mariadb.service';
 import { plainToInstance } from 'class-transformer';
 import { hash } from 'bcrypt';
 import { responseMessage } from 'src/common/utils/dto/utils.dto';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prismaService: PrismaMysqlService) {}
+  constructor(private readonly mariaDbService: MariaDbService) {}
 
   async register(
     registerUserDto: RegisterUserDto,
   ): Promise<RegisterResponseDto> {
     const { name, email, password } = registerUserDto;
 
-    const checkUser = await this.prismaService.users.findUnique({
+    const checkUser = await this.mariaDbService.users.findUnique({
       where: {
         email: email,
       },
@@ -34,7 +34,7 @@ export class UserService {
       throw new ConflictException('El correo ya está registrado');
     }
 
-    const newUser = await this.prismaService.users.create({
+    const newUser = await this.mariaDbService.users.create({
       data: {
         name,
         email,
@@ -47,25 +47,25 @@ export class UserService {
     return plainToInstance(RegisterResponseDto, newUser);
   }
 
-  async getProfile(user: UserPayloadDto): Promise<responseGetProfileDto> {
+  async getProfile(user: UserPayloadDto): Promise<ResponseGetProfileDto> {
     const { id } = user;
 
-    const userFound = await this.prismaService.users.findUnique({
+    const userFound = await this.mariaDbService.users.findUnique({
       where: { id: id, status: 1 },
     });
     if (!userFound) {
       throw new BadRequestException('User not found');
     }
-    return plainToInstance(responseGetProfileDto, userFound);
+    return plainToInstance(ResponseGetProfileDto, userFound);
   }
 
   async editProfile(
-    dto: editProfileDto,
+    dto: EditProfileDto,
     userId: number,
   ): Promise<responseMessage> {
     const { name } = dto;
 
-    await this.prismaService.users.update({
+    await this.mariaDbService.users.update({
       where: { id: userId },
       data: { name },
     });

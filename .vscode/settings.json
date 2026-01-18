@@ -1,4 +1,8 @@
 {
     "material-icon-theme.activeIconPack": "nest",
-    "prettier.enable": true
+    "prettier.enable": true,
+    "sonarlint.connectedMode.project": {
+        "connectionId": "http-localhost-9000",
+        "projectKey": "imox_cloud_backend"
+    }
 }

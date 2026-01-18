@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { RedisService } from '../redis/redis.service';
-import { PrismaMongoService } from '../prisma/prisma-mongo.service';
-import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
+import { TelemetryRedisService } from '../database/telemetry/telemetry-redis.service';
+import { InfluxDbService } from '../database/influxdb.service';
+import { MariaDbService } from '../database/mariadb.service';
 import { TelemetryReadingDto } from './dto/telemetry-reading.dto';
 
 @Injectable()
@@ -10,9 +10,9 @@ export class TelemetryScheduler {
   private readonly logger = new Logger(TelemetryScheduler.name);
 
   constructor(
-    private readonly redisService: RedisService,
-    private readonly prismaMongo: PrismaMongoService,
-    private readonly prismaMysql: PrismaMysqlService,
+    private readonly redisService: TelemetryRedisService,
+    private readonly prismaMongo: InfluxDbService,
+    private readonly prismaMysql: MariaDbService,
   ) {}
 
   /**
@@ -97,24 +97,24 @@ export class TelemetryScheduler {
           continue;
         }
 
-        await this.prismaMongo.telemetry.upsert({
-          where: {
-            iotId_userId: {
-              iotId: iotId,
-              userId: device.user_id,
-            },
-          },
-          update: {
-            readings: {
-              push: readings,
-            },
-          },
-          create: {
-            iotId: iotId,
-            userId: device.user_id,
-            readings: readings,
-          },
-        });
+        // await this.prismaMongo.telemetry.upsert({
+        //   where: {
+        //     iotId_userId: {
+        //       iotId: iotId,
+        //       userId: device.user_id,
+        //     },
+        //   },
+        //   update: {
+        //     readings: {
+        //       push: readings,
+        //     },
+        //   },
+        //   create: {
+        //     iotId: iotId,
+        //     userId: device.user_id,
+        //     readings: readings,
+        //   },
+        // });
 
         await this.redisService.clearCriticalEvents(iotId);
       }

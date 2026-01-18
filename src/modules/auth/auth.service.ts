@@ -4,7 +4,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { RedisService } from '../redis/redis.service';
+import { AuthRedisService } from '../database/auth/auth-redis.service';
 import {
   LoginUserDto,
   LoginResponseDto,
@@ -15,7 +15,7 @@ import {
   ResetPasswordResponseDto,
 } from './dto/auth.dto';
 import { responseMessage } from '../../common/utils/dto/utils.dto';
-import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
+import { MariaDbService } from '../database/mariadb.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from './jwt.service';
 import { MailService } from '../mail/mail.service';
@@ -23,8 +23,8 @@ import { MailService } from '../mail/mail.service';
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly redisService: RedisService,
-    private readonly prismaService: PrismaMysqlService,
+    private readonly redisService: AuthRedisService,
+    private readonly mariaDbService: MariaDbService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
   ) {}
@@ -32,7 +32,7 @@ export class AuthService {
   async login(loginUserDto: LoginUserDto): Promise<LoginResponseDto> {
     const { email, password } = loginUserDto;
 
-    const user = await this.prismaService.users.findUnique({
+    const user = await this.mariaDbService.users.findUnique({
       where: { email, status: 1 },
     });
 
@@ -83,7 +83,7 @@ export class AuthService {
     if (accessToken) {
       const token = accessToken.replace('Bearer ', '');
       const decoded = this.jwtService.decode(token);
-      if (decoded && decoded.exp) {
+      if (decoded?.exp) {
         const ttl = decoded.exp - Math.floor(Date.now() / 1000);
         if (ttl > 0) {
           await this.redisService.blacklistToken(token, ttl + 120);
@@ -99,54 +99,47 @@ export class AuthService {
   ): Promise<RefreshTokenResponseDto> {
     const { refreshToken } = refreshTokenDto;
 
-    try {
-      const payload = await this.jwtService.verifyToken(refreshToken);
-      const userId = payload.sub;
-      const deviceId = payload.deviceId || 'mobile_app_default';
+    const payload = await this.jwtService.verifyToken(refreshToken);
+    const userId = payload.sub;
+    const deviceId = payload.deviceId || 'mobile_app_default';
 
-      const storedToken = await this.redisService.getRefreshToken(
-        userId,
-        deviceId,
-      );
-      if (!storedToken || storedToken !== refreshToken) {
-        if (storedToken) {
-          await this.redisService.deleteRefreshToken(userId, deviceId);
-        }
-        throw new UnauthorizedException('Token inválido o reusado');
+    const storedToken = await this.redisService.getRefreshToken(
+      userId,
+      deviceId,
+    );
+    
+    if (!storedToken || storedToken !== refreshToken) {
+      if (storedToken) {
+        await this.redisService.deleteRefreshToken(userId, deviceId);
       }
-
-      const user = await this.prismaService.users.findUnique({
-        where: { id: userId, status: 1 },
-      });
-
-      if (!user) {
-        throw new UnauthorizedException('Usuario inactivo o no encontrado');
-      }
-
-      const newPayload = {
-        sub: user.id,
-        email: user.email,
-        role: user.role,
-        deviceId,
-      };
-      const newAccessToken =
-        await this.jwtService.generateAccessToken(newPayload);
-      const newRefreshToken =
-        await this.jwtService.generateRefreshToken(newPayload);
-
-      await this.redisService.saveRefreshToken(
-        userId,
-        deviceId,
-        newRefreshToken,
-      );
-
-      return {
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-      };
-    } catch (error) {
-      throw new UnauthorizedException('Refresh token inválido o expirado');
+      throw new UnauthorizedException('Token inválido o reusado');
     }
+
+    const user = await this.mariaDbService.users.findUnique({
+      where: { id: userId, status: 1 },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Usuario inactivo o no encontrado');
+    }
+
+    const newPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      deviceId,
+    };
+    const newAccessToken =
+      await this.jwtService.generateAccessToken(newPayload);
+    const newRefreshToken =
+      await this.jwtService.generateRefreshToken(newPayload);
+
+    await this.redisService.saveRefreshToken(userId, deviceId, newRefreshToken);
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    };
   }
 
   async resetPassword(
@@ -165,7 +158,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 3. Actualizar usuario
-    await this.prismaService.users.update({
+    await this.mariaDbService.users.update({
       where: { id: userId },
       data: { password: hashedPassword },
     });
@@ -188,7 +181,7 @@ export class AuthService {
       );
     }
 
-    const user = await this.prismaService.users.findUnique({
+    const user = await this.mariaDbService.users.findUnique({
       where: { email },
     });
 

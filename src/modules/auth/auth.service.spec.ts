@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { RedisService } from '../redis/redis.service';
-import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
+import { RedisService } from '../database/redis.service';
+import { MariaDbService } from '../database/mariadb.service';
 import { JwtService } from './jwt.service';
 import { MailService } from '../mail/mail.service';
 import { UnauthorizedException } from '@nestjs/common';
@@ -51,7 +51,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: RedisService, useValue: mockRedisService },
-        { provide: PrismaMysqlService, useValue: mockPrismaService },
+        { provide: MariaDbService, useValue: mockPrismaService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: MailService, useValue: mockMailService },
       ],

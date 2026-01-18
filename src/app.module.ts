@@ -1,26 +1,24 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { UserModule } from './modules/user/user.module';
-import { PrismaModule } from './modules/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { RedisModule } from './modules/redis/redis.module';
+import { DatabaseModule } from './modules/database/database.module';
 import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
 import { MailModule } from './modules/mail/mail.module';
-import { IotModule } from './modules/iot/iot.module';
-import { MqttModule } from './modules/mqtt/mqtt.module';
-import { TelemetryModule } from './modules/telemetry/telemetry.module';
+// import { IotModule } from './modules/iot/iot.module';
+// import { MqttModule } from './modules/mqtt/mqtt.module';
+// import { TelemetryModule } from './modules/telemetry/telemetry.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     UserModule,
     AuthModule,
-    PrismaModule,
-    RedisModule,
+    DatabaseModule,
     MailModule,
-    IotModule,
-    MqttModule,
-    TelemetryModule,
+    //IotModule,
+    //MqttModule,
+    //TelemetryModule,
   ],
   controllers: [],
   providers: [],

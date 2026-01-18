@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { MqttService } from './mqtt.service';
-import { RedisModule } from '../redis/redis.module';
-import { PrismaModule } from '../prisma/prisma.module';
+import { RedisService } from '../database/redis.service';
+import { MariaDbService } from '../database/mariadb.service';
 import { TelemetryModule } from '../telemetry/telemetry.module';
 
 @Module({
-  imports: [RedisModule, PrismaModule, TelemetryModule],
+  imports: [RedisService, MariaDbService, TelemetryModule],
   providers: [MqttService],
   exports: [MqttService],
 })

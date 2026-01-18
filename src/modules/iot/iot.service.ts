@@ -11,19 +11,19 @@ import {
   ResponseHistoryLightweightDto,
   GetHistoryDto,
 } from './dto/iot.dto';
-import { PrismaMysqlService } from '../prisma/prisma-mysql.service';
+import { MariaDbService } from '../database/mariadb.service';
 import { responseMessage } from '../../common/utils/dto/utils.dto';
 import { plainToInstance } from 'class-transformer';
 import crypto from 'crypto';
-import { PrismaMongoService } from '../prisma/prisma-mongo.service';
+import { InfluxDbService } from '../database/influxdb.service';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class IotService {
   constructor(
-    private readonly prismaMysql: PrismaMysqlService,
-    private readonly prismaMongo: PrismaMongoService,
+    private readonly prismaMysql: MariaDbService,
+    private readonly prismaMongo: InfluxDbService,
   ) {}
 
   async createIot(createIotDto: createIotDto): Promise<responseIotDto> {
@@ -114,9 +114,9 @@ export class IotService {
       );
     }
 
-    await this.prismaMongo.telemetry.deleteMany({
-      where: { iotId: iot.id, userId: iot.user_id },
-    });
+    // await this.prismaMongo.telemetry.deleteMany({
+    //   where: { iotId: iot.id, userId: iot.user_id },
+    // });
 
     await this.prismaMysql.iot.update({
       where: { id: iot.id },
@@ -128,64 +128,64 @@ export class IotService {
     };
   }
 
-  async getDeviceHistory(
-    dto: GetHistoryDto,
-    user: UserPayloadDto,
-  ): Promise<ResponseHistoryLightweightDto> {
-    const { startDate, endDate, iotId } = dto;
-    const { id } = user;
+  // async getDeviceHistory(
+  //   dto: GetHistoryDto,
+  //   user: UserPayloadDto,
+  // ): Promise<ResponseHistoryLightweightDto> {
+  //   const { startDate, endDate, iotId } = dto;
+  //   const { id } = user;
 
-    const device = await this.prismaMysql.iot.findUnique({
-      where: { id: iotId },
-    });
+  //   const device = await this.prismaMysql.iot.findUnique({
+  //     where: { id: iotId },
+  //   });
 
-    if (!device) {
-      throw new BadRequestException('Device not found');
-    }
+  //   if (!device) {
+  //     throw new BadRequestException('Device not found');
+  //   }
 
-    if (device.user_id !== id) {
-      throw new ConflictException('You do not own this device');
-    }
+  //   if (device.user_id !== id) {
+  //     throw new ConflictException('You do not own this device');
+  //   }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+  //   const start = new Date(startDate);
+  //   const end = new Date(endDate);
 
-    const mongoTelemetry = await this.prismaMongo.telemetry.findUnique({
-      where: {
-        iotId_userId: {
-          iotId: device.id,
-          userId: device.user_id,
-        },
-      },
-    });
-    const columns = [
-      'timestamp',
-      'voltaje',
-      'corriente',
-      'potencia',
-      'energia',
-    ];
+  //   const mongoTelemetry = await this.prismaMongo.telemetry.findUnique({
+  //     where: {
+  //       iotId_userId: {
+  //         iotId: device.id,
+  //         userId: device.user_id,
+  //       },
+  //     },
+  //   });
+  //   const columns = [
+  //     'timestamp',
+  //     'voltaje',
+  //     'corriente',
+  //     'potencia',
+  //     'energia',
+  //   ];
 
-    if (!mongoTelemetry || !mongoTelemetry.readings) {
-      return {
-        columns,
-        data: [],
-      };
-    }
+  //   if (!mongoTelemetry || !mongoTelemetry.readings) {
+  //     return {
+  //       columns,
+  //       data: [],
+  //     };
+  //   }
 
-    const data = mongoTelemetry.readings
-      .filter((r) => r.timestamp >= start && r.timestamp <= end)
-      .map((r) => [
-        r.timestamp,
-        r.electricas.voltaje_v,
-        r.electricas.corriente_a,
-        r.electricas.potencia_w,
-        r.electricas.energia_kwh,
-      ]);
+  //   const data = mongoTelemetry.readings
+  //     .filter((r) => r.timestamp >= start && r.timestamp <= end)
+  //     .map((r) => [
+  //       r.timestamp,
+  //       r.electricas.voltaje_v,
+  //       r.electricas.corriente_a,
+  //       r.electricas.potencia_w,
+  //       r.electricas.energia_kwh,
+  //     ]);
 
-    return {
-      columns,
-      data,
-    };
-  }
+  //   return {
+  //     columns,
+  //     data,
+  //   };
+  // }
 }

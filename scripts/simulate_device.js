@@ -2,7 +2,7 @@ const mqtt = require('mqtt');
 
 // Configuración
 const BROKER_URL = 'mqtt://localhost:1883';
-const DEVICE_ID = 1; // Asegúrate de que este ID exista en tu DB MySQL (tabla iot)
+const DEVICE_ID = 1; // Asegúrate de que este ID exista en tu DB MariaDB (tabla iot)
 const TOPIC = `imox/devices/${DEVICE_ID}/telemetry`;
 const INTERVAL_MS = 1500;
 
