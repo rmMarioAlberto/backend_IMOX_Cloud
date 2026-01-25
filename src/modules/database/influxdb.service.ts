@@ -78,4 +78,49 @@ export class InfluxDbService implements OnModuleInit, OnModuleDestroy {
   getBucket(): string {
     return this.bucket;
   }
+
+  /**
+   * Eliminar datos usando la API v2 de InfluxDB
+   * @param start Fecha inicio (RFC3339)
+   * @param stop Fecha fin (RFC3339)
+   * @param predicate Filtro de eliminación
+   */
+  async deleteData(
+    start: string,
+    stop: string,
+    predicate: string,
+  ): Promise<void> {
+    const deleteUrl = `${this.url}/api/v2/delete?org=${encodeURIComponent(
+      this.org,
+    )}&bucket=${encodeURIComponent(this.bucket)}`;
+
+    try {
+      const response = await fetch(deleteUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Token ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          start,
+          stop,
+          predicate,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `InfluxDB delete failed: ${response.status} ${response.statusText} - ${errorText}`,
+        );
+      }
+
+      this.logger.log(
+        `Datos eliminados correctamente. Predicate: ${predicate}`,
+      );
+    } catch (error) {
+      this.logger.error('Error al eliminar datos de InfluxDB', error);
+      throw error;
+    }
+  }
 }

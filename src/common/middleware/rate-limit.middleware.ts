@@ -28,7 +28,7 @@ export class RateLimitMiddleware implements NestMiddleware {
 
   // Configuraciones por tipo de endpoint
   private readonly configs: Map<string, RateLimitConfig> = new Map([
-    ['auth', { windowMs: 60000, maxRequests: 5 }], // Login: 5 req/min
+    ['auth', { windowMs: 60000, maxRequests: 20 }], // Login: 5 req/min
     ['iot', { windowMs: 60000, maxRequests: 1000 }], // IoT data: 1000 req/min
     ['default', { windowMs: 60000, maxRequests: 100 }], // General: 100 req/min
   ]);

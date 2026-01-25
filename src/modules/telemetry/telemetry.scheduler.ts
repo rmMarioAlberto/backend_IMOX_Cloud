@@ -18,7 +18,7 @@ export class TelemetryScheduler {
   ) {}
 
   /**
-   * Persistir lecturas en MongoDB cada 5 minutos
+   * Persistir lecturas en InfluxDB cada 5 minutos
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async persistAllDevices() {

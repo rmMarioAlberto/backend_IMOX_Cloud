@@ -123,4 +123,16 @@ export class TelemetryInfluxService {
       return null;
     }
   }
+
+  /**
+   * Eliminar toda la telemetría de un dispositivo
+   */
+  async deleteTelemetryByIotId(iotId: number): Promise<void> {
+    const start = '1970-01-01T00:00:00Z';
+    const stop = new Date().toISOString();
+    // InfluxDB delete predicate syntax
+    const predicate = `_measurement="telemetry" AND iot_id="${iotId}"`;
+
+    await this.influxDbService.deleteData(start, stop, predicate);
+  }
 }

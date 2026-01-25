@@ -6,15 +6,19 @@ import {
   OnGatewayDisconnect,
   ConnectedSocket,
   MessageBody,
+  WsException,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+import { Logger, UseFilters } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '../auth/jwt.service';
 import { MariaDbService } from '../database/mariadb.service';
 import { TelemetryRedisService } from '../database/telemetry/telemetry-redis.service';
+import { AuthRedisService } from '../database/auth/auth-redis.service';
 import { TelemetryInfluxService } from '../database/telemetry/telemetry-influx.service';
 import { TelemetryResponseDto } from './dto/telemetry-response.dto';
 import { toTelemetryResponse } from './utils/telemetry.mapper';
+import { WsExceptionsFilter } from '../../common/filters/ws-exceptions.filter';
 
 @WebSocketGateway({
   cors: {
@@ -22,6 +26,7 @@ import { toTelemetryResponse } from './utils/telemetry.mapper';
   },
   namespace: 'telemetry',
 })
+@UseFilters(WsExceptionsFilter)
 export class TelemetryGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
@@ -35,6 +40,8 @@ export class TelemetryGateway
     private readonly prismaMysql: MariaDbService,
     private readonly redisService: TelemetryRedisService,
     private readonly telemetryInfluxService: TelemetryInfluxService,
+    private readonly authRedisService: AuthRedisService,
+    private readonly configService: ConfigService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -50,6 +57,15 @@ export class TelemetryGateway
       }
 
       const payload = await this.jwtService.verifyToken(token);
+
+      // Check Blacklist
+      const isBlacklisted =
+        await this.authRedisService.isTokenBlacklisted(token);
+      if (isBlacklisted) {
+        this.logger.warn(`Cliente ${client.id} intentó usar token revocado`);
+        client.disconnect();
+        return;
+      }
 
       client.data.user = payload;
 
@@ -69,98 +85,112 @@ export class TelemetryGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { iotId: number },
   ) {
-    const iotId = data.iotId;
-    if (!iotId) return;
-
     try {
-      const user = client.data.user;
-      if (!user) {
-        client.emit('error', { message: 'Unauthorized' });
-        return;
-      }
-
-      const device = await this.prismaMysql.iot.findUnique({
-        where: { id: iotId },
-        select: { user_id: true },
-      });
-
-      if (!device) {
-        client.emit('error', { message: 'Device not found' });
-        return;
-      }
-
-      // Allow access if user owns the device OR if user is admin (optional, sticking to owner for now based on previous code)
-      const isOwner = device.user_id === user.sub;
-
-      if (!isOwner) {
-        this.logger.warn(
-          `Acceso denegado: Usuario ${user.sub} intentó suscribirse a dispositivo ${iotId}`,
-        );
-        client.emit('exception', {
-          status: 'error',
-          message: 'Forbidden: You do not own this device',
-        });
-        return;
-      }
-
-      const roomName = `device:${iotId}`;
-      client.join(roomName);
-
-      let lastTelemetry: TelemetryResponseDto | null = null;
-      const redisData = await this.redisService.getTelemetryLast(iotId);
-
-      if (redisData) {
-        lastTelemetry = toTelemetryResponse(
-          redisData,
-          false,
-          redisData.anomaly_type,
-        );
-      } else {
-        // Fallback to InfluxDB if not in Redis
-        const influxData =
-          await this.telemetryInfluxService.queryLatestTelemetry(iotId);
-
-        if (influxData) {
-          // Map InfluxDB result to TelemetryResponseDto
-          // InfluxDB returns flat object: { _time, voltaje_v, ... }
-          const mappedData = {
-            electricas: {
-              voltaje_v: influxData.voltaje_v,
-              corriente_a: influxData.corriente_a,
-              potencia_w: influxData.potencia_w,
-              energia_kwh: influxData.energia_kwh,
-              frecuencia_hz: influxData.frecuencia_hz,
-              factor_potencia: influxData.factor_potencia,
-            },
-            diagnostico: {
-              rssi_dbm: influxData.rssi_dbm,
-              uptime_s: influxData.uptime_s,
-              // ip and pzem_status might be tags or fields depending on write implementation
-              // stored as tags in writeTelemetryPoint
-              ip: influxData.ip,
-              pzem_status: influxData.pzem_status,
-            },
-            timestamp: influxData._time,
-            anomaly_type: influxData.anomaly_type,
-          };
-
-          lastTelemetry = toTelemetryResponse(
-            mappedData as any,
-            influxData.anomaly_type && influxData.anomaly_type !== 'NONE',
-            influxData.anomaly_type,
-          );
-        }
-      }
-
-      if (lastTelemetry) {
-        client.emit('telemetry', lastTelemetry);
-      }
-
-      return { event: 'subscribed', data: { room: roomName } };
+      return await this.subscribeLogic(client, data);
     } catch (error) {
-      this.logger.error(`Error en suscripción: ${error.message}`);
-      client.emit('error', { message: 'Internal Server Error' });
+      new WsExceptionsFilter(this.configService).catch(error, {
+        switchToWs: () => ({
+          getClient: () => client,
+          getData: () => data,
+        }),
+      } as any);
     }
+  }
+
+  private async subscribeLogic(client: Socket, data: { iotId: number }) {
+    const iotId = data.iotId;
+    if (!iotId) {
+      throw new WsException({
+        message: 'iotId is required',
+        errorCode: 'INVALID_DATA',
+      });
+    }
+
+    const user = client.data.user;
+    if (!user) {
+      throw new WsException({
+        message: 'Unauthorized',
+        errorCode: 'UNAUTHORIZED',
+      });
+    }
+
+    const device = await this.prismaMysql.iot.findUnique({
+      where: { id: iotId },
+      select: { user_id: true },
+    });
+
+    if (!device) {
+      throw new WsException({
+        message: 'Device not found',
+        errorCode: 'NOT_FOUND',
+      });
+    }
+
+    // Allow access if user owns the device OR if user is admin (optional, sticking to owner for now based on previous code)
+    const isOwner = device.user_id === user.sub;
+
+    if (!isOwner) {
+      this.logger.warn(
+        `Acceso denegado: Usuario ${user.sub} intentó suscribirse a dispositivo ${iotId}`,
+      );
+      throw new WsException({
+        message: 'Forbidden: You do not own this device',
+        errorCode: 'FORBIDDEN',
+      });
+    }
+
+    const roomName = `device:${iotId}`;
+    client.join(roomName);
+
+    let lastTelemetry: TelemetryResponseDto | null = null;
+    const redisData = await this.redisService.getTelemetryLast(iotId);
+
+    if (redisData) {
+      lastTelemetry = toTelemetryResponse(
+        redisData,
+        false,
+        redisData.anomaly_type,
+      );
+    } else {
+      // Fallback to InfluxDB if not in Redis
+      const influxData =
+        await this.telemetryInfluxService.queryLatestTelemetry(iotId);
+
+      if (influxData) {
+        // Map InfluxDB result to TelemetryResponseDto
+        // InfluxDB returns flat object: { _time, voltaje_v, ... }
+        const mappedData = {
+          electricas: {
+            voltaje_v: influxData.voltaje_v,
+            corriente_a: influxData.corriente_a,
+            potencia_w: influxData.potencia_w,
+            energia_kwh: influxData.energia_kwh,
+            frecuencia_hz: influxData.frecuencia_hz,
+            factor_potencia: influxData.factor_potencia,
+          },
+          diagnostico: {
+            rssi_dbm: influxData.rssi_dbm,
+            uptime_s: influxData.uptime_s,
+            ip: influxData.ip,
+            pzem_status: influxData.pzem_status,
+          },
+          timestamp: influxData._time,
+          anomaly_type: influxData.anomaly_type,
+        };
+
+        lastTelemetry = toTelemetryResponse(
+          mappedData as any,
+          influxData.anomaly_type && influxData.anomaly_type !== 'NONE',
+          influxData.anomaly_type,
+        );
+      }
+    }
+
+    if (lastTelemetry) {
+      client.emit('telemetry', lastTelemetry);
+    }
+
+    return { event: 'subscribed', data: { room: roomName } };
   }
 
   @SubscribeMessage('unsubscribeFromDevice')

@@ -209,19 +209,16 @@ export class IotService {
   /**
    * Eliminar todos los datos de telemetría de un dispositivo
    * Utilizado durante el soft reset
-   *
-   * Nota: InfluxDB v2 delete API requiere configuración adicional.
-   * Por ahora se registra la solicitud para implementación futura.
    */
   private async deleteTelemetryData(iotId: number): Promise<void> {
-    // TODO: Implementar eliminación real usando InfluxDB DeleteAPI
-    // La API de eliminación requiere acceso HTTP directo al endpoint:
-    // POST /api/v2/delete?org=<org>&bucket=<bucket>
-    // Con body: { "start": "1970-01-01T00:00:00Z", "stop": "now", "predicate": "iot_id=\"1\"" }
-
-    console.log(
-      `[IoT Service] Telemetry deletion requested for iotId ${iotId}. ` +
-        `Full implementation pending - consider implementing via HTTP DeleteAPI.`,
-    );
+    try {
+      await this.telemetryInfluxService.deleteTelemetryByIotId(iotId);
+      this.logger.log(`Telemetry data deleted for device ${iotId}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete telemetry for device ${iotId}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
   }
 }
