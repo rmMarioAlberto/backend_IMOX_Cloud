@@ -24,6 +24,20 @@ if [ "$TOTAL_MEM" -lt 900 ]; then
     exit 1
 fi
 
+# Detectar comando de docker compose
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+elif docker compose version &> /dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+else
+    echo "❌ Error: No se encontró docker-compose ni docker compose"
+    echo "   Instala Docker Compose: https://docs.docker.com/compose/install/"
+    exit 1
+fi
+
+echo "✅ Usando: $DOCKER_COMPOSE"
+echo ""
+
 # Verificar archivo .env
 if [ ! -f "$DOCKER_DIR/.env.production" ]; then
     echo "❌ Error: Falta archivo .env.production en $DOCKER_DIR"
@@ -45,17 +59,17 @@ fi
 # Build de imágenes
 echo ""
 echo "🔨 Building NestJS production image..."
-docker-compose -f "$DOCKER_DIR/docker-compose.prod.yml" build nestjs
+$DOCKER_COMPOSE -f "$DOCKER_DIR/docker-compose.prod.yml" build nestjs
 
 # Detener contenedores existentes
 echo ""
 echo "🛑 Deteniendo contenedores existentes..."
-docker-compose -f "$DOCKER_DIR/docker-compose.prod.yml" down
+$DOCKER_COMPOSE -f "$DOCKER_DIR/docker-compose.prod.yml" down
 
 # Iniciar servicios
 echo ""
 echo "🚀 Iniciando servicios en modo producción..."
-docker-compose -f "$DOCKER_DIR/docker-compose.prod.yml" --env-file "$DOCKER_DIR/.env.production" up -d
+$DOCKER_COMPOSE -f "$DOCKER_DIR/docker-compose.prod.yml" --env-file "$DOCKER_DIR/.env.production" up -d
 
 # Verificar estado
 echo ""
@@ -64,7 +78,7 @@ sleep 10
 
 echo ""
 echo "📊 Estado de los contenedores:"
-docker-compose -f "$DOCKER_DIR/docker-compose.prod.yml" ps
+$DOCKER_COMPOSE -f "$DOCKER_DIR/docker-compose.prod.yml" ps
 
 echo ""
 echo "💾 Uso de recursos:"
