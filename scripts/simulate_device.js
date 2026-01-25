@@ -51,12 +51,12 @@ function generateRandomReading() {
     iot_id: DEVICE_ID,
     user_id: 1, // Simulado (en producción normalmente lo gestiona el backend)
     electricas: {
-      voltaje_v: parseFloat(voltaje.toFixed(2)),
-      corriente_a: parseFloat(corriente.toFixed(2)),
-      potencia_w: parseFloat(potencia.toFixed(2)),
-      energia_kwh: parseFloat((Math.random() * 100).toFixed(2)),
-      frecuencia_hz: parseFloat((60 + (Math.random() * 0.2 - 0.1)).toFixed(2)),
-      factor_potencia: parseFloat((0.9 + Math.random() * 0.1).toFixed(2)),
+      voltaje_v: Number.parseFloat(voltaje.toFixed(2)),
+      corriente_a: Number.parseFloat(corriente.toFixed(2)),
+      potencia_w: Number.parseFloat(potencia.toFixed(2)),
+      energia_kwh: Number.parseFloat((Math.random() * 100).toFixed(2)),
+      frecuencia_hz: Number.parseFloat((60 + (Math.random() * 0.2 - 0.1)).toFixed(2)),
+      factor_potencia: Number.parseFloat((0.9 + Math.random() * 0.1).toFixed(2)),
     },
     diagnostico: {
       ip: '192.168.1.50',

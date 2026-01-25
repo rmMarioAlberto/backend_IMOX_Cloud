@@ -69,3 +69,6 @@ generated
 # MQTT Secrets
 docker/mqtt/password_file
 docker/mqtt/acl_file
+
+#sonar
+sonar-project.properties
