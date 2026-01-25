@@ -2,13 +2,16 @@ const mqtt = require('mqtt');
 
 // Configuración
 const BROKER_URL = 'mqtt://localhost:1883';
-const DEVICE_ID = 1; // Asegúrate de que este ID exista en tu DB MariaDB (tabla iot)
+const DEVICE_ID = 2; // Asegúrate de que este ID exista en tu DB MariaDB (tabla iot)
+const DEVICE_SECRET = '8d5a1fcd21ee2c930869cb5c2af6ed70cf1a742de6640891'; // Reemplaza con el secret real del dispositivo
 const TOPIC = `imox/devices/${DEVICE_ID}/telemetry`;
 const INTERVAL_MS = 1500;
 
 console.log(`📡 Conectando al simulador IoT al broker ${BROKER_URL}...`);
 const client = mqtt.connect(BROKER_URL, {
   clientId: `sim_device_${DEVICE_ID}`,
+  username: String(DEVICE_ID), // El broker espera el ID como usuario
+  password: DEVICE_SECRET,     // El secret como contraseña
 });
 
 client.on('connect', () => {

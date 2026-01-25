@@ -1,52 +1,33 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import * as Sentry from '@sentry/node';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
+import { initSentry } from './config/sentry.config';
+import { setupSwagger } from './config/swagger.config';
 import { globalValidationPipe } from './common/pipes/validation.pipe';
 import { corsConfig } from './config/cors.config';
 import { AllExceptionsFilter } from './common/filters/exceptions.filter';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
-  // Inicializar Sentry
-  if (process.env.GLITCHTIP_DSN) {
-    Sentry.init({
-      dsn: process.env.GLITCHTIP_DSN,
-      environment: process.env.NODE_ENV || 'development',
-
-      tracesSampleRate: 1.0,
-      profilesSampleRate: 1.0,
-      integrations: [nodeProfilingIntegration()],
-    });
-    console.log('GlitchTip inicializado correctamente');
-  } else {
-    console.warn('GLITCHTIP_DSN no configurado. Monitoreo deshabilitado.');
-  }
-
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+
+  // Inicializar Sentry
+  initSentry(configService);
 
   // Configurar CORS para Web, Móvil y IoT
-  app.enableCors(corsConfig);
+  app.enableCors(corsConfig(configService));
 
   // Aplicar filtro global de excepciones
-  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalFilters(new AllExceptionsFilter(configService));
 
   // Aplicar validación global
-  app.useGlobalPipes(globalValidationPipe);
+  app.useGlobalPipes(globalValidationPipe(configService));
 
   // Configurar Swagger
-  const config = new DocumentBuilder()
-    .setTitle('IMOX Cloud API')
-    .setDescription('Documentación de la API para el sistema IMOX Cloud IoT')
-    .setVersion('1.0')
-    .addTag('User', 'Operaciones de usuarios')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  setupSwagger(app);
 
   // Iniciar el servidor
-  const port = process.env.NESTJS_PORT ?? process.env.PORT ?? 3000;
+  const port = configService.get<number>('NESTJS_PORT') || 3000;
   await app.listen(port);
 }
 bootstrap();

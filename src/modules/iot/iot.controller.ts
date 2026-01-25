@@ -91,21 +91,21 @@ export class IotController {
     return this.iotService.softResetIot(softResetIotDto, user);
   }
 
-  // @Post('history')
-  // @HttpCode(HttpStatus.OK)
-  // @ApiOperation({
-  //   summary: 'Get historical telemetry data for charts (private)',
-  // })
-  // @ApiOkResponse({
-  //   description: 'Historical readings in lightweight format (columns + data).',
-  //   type: ResponseHistoryLightweightDto,
-  // })
-  // @UseGuards(JwtAuthGuard)
-  // @ApiBearerAuth()
-  // async getHistory(
-  //   @Body() getHistoryDto: GetHistoryDto,
-  //   @GetUser() user: UserPayloadDto,
-  // ): Promise<ResponseHistoryLightweightDto> {
-  //   return this.iotService.getDeviceHistory(getHistoryDto, user);
-  // }
+  @Post('history')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get historical telemetry data for charts (private)',
+  })
+  @ApiOkResponse({
+    description: 'Historical readings in lightweight format (columns + data).',
+    type: ResponseHistoryLightweightDto,
+  })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async getHistory(
+    @Body() getHistoryDto: GetHistoryDto,
+    @GetUser() user: UserPayloadDto,
+  ): Promise<ResponseHistoryLightweightDto> {
+    return this.iotService.getDeviceHistory(getHistoryDto, user);
+  }
 }

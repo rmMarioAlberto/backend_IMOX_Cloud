@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Response, Request } from 'express';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
@@ -13,6 +14,8 @@ import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
+
+  constructor(private readonly configService: ConfigService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -142,8 +145,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
     };
 
-    // Solo loggear stack trace en desarrollo
-    if (process.env.NODE_ENV !== 'production') {
+    if (this.configService.get('NODE_ENV') !== 'production') {
       errorLog['stack'] = (exception as Error)?.stack;
     }
 
@@ -162,8 +164,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       errorResponse.errorCode = errorCode;
     }
 
-    // Solo incluir stack trace en desarrollo
-    if (process.env.NODE_ENV !== 'production' && (exception as Error)?.stack) {
+    if (
+      this.configService.get('NODE_ENV') !== 'production' &&
+      (exception as Error)?.stack
+    ) {
       errorResponse.stack = (exception as Error).stack;
     }
 

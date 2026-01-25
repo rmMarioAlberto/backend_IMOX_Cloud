@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthRedisService } from '../database/auth/auth-redis.service';
 import {
   LoginUserDto,
@@ -27,6 +28,7 @@ export class AuthService {
     private readonly mariaDbService: MariaDbService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly configService: ConfigService,
   ) {}
 
   async login(loginUserDto: LoginUserDto): Promise<LoginResponseDto> {
@@ -107,7 +109,7 @@ export class AuthService {
       userId,
       deviceId,
     );
-    
+
     if (!storedToken || storedToken !== refreshToken) {
       if (storedToken) {
         await this.redisService.deleteRefreshToken(userId, deviceId);
@@ -203,7 +205,10 @@ export class AuthService {
 
     return {
       message: 'Código enviado exitosamente. Revisa tu correo.',
-      debug_token: process.env.NODE_ENV === 'development' ? token : undefined,
+      debug_token:
+        this.configService.get('NODE_ENV') === 'development'
+          ? token
+          : undefined,
     };
   }
 }

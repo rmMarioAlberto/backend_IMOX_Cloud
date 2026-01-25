@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { MariaDbService } from '../database/mariadb.service';
 import { AuthRedisService } from '../database/auth/auth-redis.service';
+import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 
 @Injectable()
@@ -10,11 +11,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly prisma: MariaDbService,
     private readonly redisService: AuthRedisService,
+    configService: ConfigService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'secretKey',
+      secretOrKey: configService.get<string>('JWT_SECRET') || 'secretKey',
       passReqToCallback: true,
     });
   }

@@ -1,12 +1,13 @@
 import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+import { ConfigService } from '@nestjs/config';
 
 /**
  * Configuración CORS para el proyecto IMOX Cloud
  * Soporta: Web Apps, Apps Móviles, Dispositivos IoT
  */
-export const corsConfig: CorsOptions = {
+export const corsConfig = (configService: ConfigService): CorsOptions => ({
   origin: (origin, callback) => {
-    const corsOrigins = process.env.CORS_ORIGINS;
+    const corsOrigins = configService.get<string>('CORS_ORIGINS');
 
     // Permitir todos los orígenes si está configurado
     if (corsOrigins === '*') {
@@ -42,4 +43,4 @@ export const corsConfig: CorsOptions = {
     'X-Nonce',
   ],
   maxAge: 86400, // 24 horas
-};
+});

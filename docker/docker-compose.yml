@@ -6,6 +6,9 @@ services:
     image: iegomez/mosquitto-go-auth:latest
     container_name: imox_mosquitto
     restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
     ports:
       - "${MQTT_PORT:-1883}:1883"
       - "${MQTT_WS_PORT:-9001}:9001"
@@ -18,10 +21,11 @@ services:
     networks:
       - imox_network
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -u backend_admin -P backend_secure_password -W 3 || exit 1"]
+      test: ["CMD-SHELL", "timeout 5 mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -u backend_admin -P backend_secure_password || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
 
   # ==================== TIME SERIES DB (INFLUXDB) ====================
   influxdb:

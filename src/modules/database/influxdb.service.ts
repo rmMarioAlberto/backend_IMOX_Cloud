@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InfluxDB, WriteApi } from '@influxdata/influxdb-client';
 
 @Injectable()
@@ -17,11 +18,11 @@ export class InfluxDbService implements OnModuleInit, OnModuleDestroy {
   private readonly org: string;
   private readonly bucket: string;
 
-  constructor() {
-    this.url = process.env.INFLUXDB_URL!;
-    this.token = process.env.INFLUXDB_TOKEN!;
-    this.org = process.env.INFLUXDB_ORG!;
-    this.bucket = process.env.INFLUXDB_BUCKET!;
+  constructor(private readonly configService: ConfigService) {
+    this.url = this.configService.get<string>('INFLUXDB_URL') || '';
+    this.token = this.configService.get<string>('INFLUXDB_TOKEN') || '';
+    this.org = this.configService.get<string>('INFLUXDB_ORG') || '';
+    this.bucket = this.configService.get<string>('INFLUXDB_BUCKET') || '';
 
     if (!this.url || !this.token || !this.org || !this.bucket) {
       throw new Error(

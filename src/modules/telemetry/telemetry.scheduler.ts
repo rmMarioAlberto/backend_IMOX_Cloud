@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
 import { TelemetryRedisService } from '../database/telemetry/telemetry-redis.service';
-import { InfluxDbService } from '../database/influxdb.service';
+import { TelemetryInfluxService } from '../database/telemetry/telemetry-influx.service';
 import { MariaDbService } from '../database/mariadb.service';
 import { TelemetryReadingDto } from './dto/telemetry-reading.dto';
 
@@ -11,8 +12,9 @@ export class TelemetryScheduler {
 
   constructor(
     private readonly redisService: TelemetryRedisService,
-    private readonly prismaMongo: InfluxDbService,
+    private readonly telemetryInfluxService: TelemetryInfluxService,
     private readonly prismaMysql: MariaDbService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -97,24 +99,22 @@ export class TelemetryScheduler {
           continue;
         }
 
-        // await this.prismaMongo.telemetry.upsert({
-        //   where: {
-        //     iotId_userId: {
-        //       iotId: iotId,
-        //       userId: device.user_id,
-        //     },
-        //   },
-        //   update: {
-        //     readings: {
-        //       push: readings,
-        //     },
-        //   },
-        //   create: {
-        //     iotId: iotId,
-        //     userId: device.user_id,
-        //     readings: readings,
-        //   },
-        // });
+        // Persistir en InfluxDB (Backup/Snapshot)
+        // Nota: Los datos ya se escriben en tiempo real vía MQTT, pero esto asegura
+        // que los eventos críticos acumulados y el snapshot de "última lectura"
+        // queden registrados históricamente. InfluxDB maneja duplicados por timestamp.
+
+        for (const reading of readings) {
+          await this.telemetryInfluxService.writeTelemetryPoint(iotId, {
+            electricas: reading.electricas,
+            diagnostico: reading.diagnostico,
+            timestamp: reading.timestamp
+              ? reading.timestamp.toISOString()
+              : new Date().toISOString(),
+            anomaly_type:
+              reading.type === 'critical' ? reading.anomaly_type : undefined,
+          } as any);
+        }
 
         await this.redisService.clearCriticalEvents(iotId);
       }
@@ -137,7 +137,11 @@ export class TelemetryScheduler {
     try {
       const deviceKeys = await this.redisService.keys('iot:*:last');
       const offlineThreshold =
-        parseInt(process.env.TELEMETRY_OFFLINE_TIMEOUT_MIN || '10', 10) *
+        parseInt(
+          this.configService.get<string>('TELEMETRY_OFFLINE_TIMEOUT_MIN') ||
+            '10',
+          10,
+        ) *
         60 *
         1000;
 

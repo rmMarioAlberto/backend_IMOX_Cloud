@@ -16,6 +16,7 @@ import { responseMessage } from '../../common/utils/dto/utils.dto';
 import { plainToInstance } from 'class-transformer';
 import crypto from 'crypto';
 import { InfluxDbService } from '../database/influxdb.service';
+import { TelemetryInfluxService } from '../database/telemetry/telemetry-influx.service';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
 import * as bcrypt from 'bcrypt';
 
@@ -23,7 +24,8 @@ import * as bcrypt from 'bcrypt';
 export class IotService {
   constructor(
     private readonly prismaMysql: MariaDbService,
-    private readonly prismaMongo: InfluxDbService,
+    private readonly influxDbService: InfluxDbService,
+    private readonly telemetryInfluxService: TelemetryInfluxService,
   ) {}
 
   async createIot(createIotDto: createIotDto): Promise<responseIotDto> {
@@ -114,9 +116,8 @@ export class IotService {
       );
     }
 
-    // await this.prismaMongo.telemetry.deleteMany({
-    //   where: { iotId: iot.id, userId: iot.user_id },
-    // });
+    // Eliminar datos de telemetría del dispositivo en InfluxDB
+    await this.deleteTelemetryData(iot.id);
 
     await this.prismaMysql.iot.update({
       where: { id: iot.id },
@@ -128,64 +129,92 @@ export class IotService {
     };
   }
 
-  // async getDeviceHistory(
-  //   dto: GetHistoryDto,
-  //   user: UserPayloadDto,
-  // ): Promise<ResponseHistoryLightweightDto> {
-  //   const { startDate, endDate, iotId } = dto;
-  //   const { id } = user;
+  async getDeviceHistory(
+    dto: GetHistoryDto,
+    user: UserPayloadDto,
+  ): Promise<ResponseHistoryLightweightDto> {
+    const { startDate, endDate, iotId } = dto;
+    const { id } = user;
 
-  //   const device = await this.prismaMysql.iot.findUnique({
-  //     where: { id: iotId },
-  //   });
+    // Verificar que el dispositivo existe y pertenece al usuario
+    const device = await this.prismaMysql.iot.findUnique({
+      where: { id: iotId },
+    });
 
-  //   if (!device) {
-  //     throw new BadRequestException('Device not found');
-  //   }
+    if (!device) {
+      throw new BadRequestException('Device not found');
+    }
 
-  //   if (device.user_id !== id) {
-  //     throw new ConflictException('You do not own this device');
-  //   }
+    if (device.user_id !== id) {
+      throw new ConflictException('You do not own this device');
+    }
 
-  //   const start = new Date(startDate);
-  //   const end = new Date(endDate);
+    // Convertir fechas a formato RFC3339 para InfluxDB
+    const start = new Date(startDate).toISOString();
+    const stop = new Date(endDate).toISOString();
 
-  //   const mongoTelemetry = await this.prismaMongo.telemetry.findUnique({
-  //     where: {
-  //       iotId_userId: {
-  //         iotId: device.id,
-  //         userId: device.user_id,
-  //       },
-  //     },
-  //   });
-  //   const columns = [
-  //     'timestamp',
-  //     'voltaje',
-  //     'corriente',
-  //     'potencia',
-  //     'energia',
-  //   ];
+    const columns = [
+      'timestamp',
+      'voltaje',
+      'corriente',
+      'potencia',
+      'energia',
+    ];
 
-  //   if (!mongoTelemetry || !mongoTelemetry.readings) {
-  //     return {
-  //       columns,
-  //       data: [],
-  //     };
-  //   }
+    try {
+      // Consultar datos de InfluxDB
+      const influxResults =
+        await this.telemetryInfluxService.queryTelemetryRange(
+          iotId,
+          start,
+          stop,
+        );
 
-  //   const data = mongoTelemetry.readings
-  //     .filter((r) => r.timestamp >= start && r.timestamp <= end)
-  //     .map((r) => [
-  //       r.timestamp,
-  //       r.electricas.voltaje_v,
-  //       r.electricas.corriente_a,
-  //       r.electricas.potencia_w,
-  //       r.electricas.energia_kwh,
-  //     ]);
+      if (!influxResults || influxResults.length === 0) {
+        return {
+          columns,
+          data: [],
+        };
+      }
 
-  //   return {
-  //     columns,
-  //     data,
-  //   };
-  // }
+      // Transformar resultados de InfluxDB al formato esperado
+      const data = influxResults.map((r) => [
+        r._time,
+        r.voltaje_v ?? 0,
+        r.corriente_a ?? 0,
+        r.potencia_w ?? 0,
+        r.energia_kwh ?? 0,
+      ]);
+
+      return {
+        columns,
+        data,
+      };
+    } catch (error) {
+      // Si hay error consultando InfluxDB, devolver datos vacíos
+      return {
+        columns,
+        data: [],
+      };
+    }
+  }
+
+  /**
+   * Eliminar todos los datos de telemetría de un dispositivo
+   * Utilizado durante el soft reset
+   *
+   * Nota: InfluxDB v2 delete API requiere configuración adicional.
+   * Por ahora se registra la solicitud para implementación futura.
+   */
+  private async deleteTelemetryData(iotId: number): Promise<void> {
+    // TODO: Implementar eliminación real usando InfluxDB DeleteAPI
+    // La API de eliminación requiere acceso HTTP directo al endpoint:
+    // POST /api/v2/delete?org=<org>&bucket=<bucket>
+    // Con body: { "start": "1970-01-01T00:00:00Z", "stop": "now", "predicate": "iot_id=\"1\"" }
+
+    console.log(
+      `[IoT Service] Telemetry deletion requested for iotId ${iotId}. ` +
+        `Full implementation pending - consider implementing via HTTP DeleteAPI.`,
+    );
+  }
 }

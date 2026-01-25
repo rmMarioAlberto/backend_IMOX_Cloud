@@ -2,7 +2,7 @@
 FROM node:20-alpine AS base
 
 # Instalación de dependencias del sistema
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat openssl procps
 
 WORKDIR /app
 
@@ -60,7 +60,7 @@ ENV NODE_ENV=production
 
 # Crear usuario no-root para seguridad
 RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nestjs
+  adduser --system --uid 1001 nestjs
 
 # Copiar dependencias de producción
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules

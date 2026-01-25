@@ -2,7 +2,9 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as mqtt from 'mqtt';
 import { MqttClient } from 'mqtt';
 import { TelemetryRedisService } from '../database/telemetry/telemetry-redis.service';
+import { TelemetryInfluxService } from '../database/telemetry/telemetry-influx.service';
 import { MariaDbService } from '../database/mariadb.service';
+import { ConfigService } from '@nestjs/config';
 import { SpikeDetectorService } from '../telemetry/spike-detector.service';
 import { TelemetryGateway } from '../telemetry/telemetry.gateway';
 import { plainToInstance } from 'class-transformer';
@@ -17,9 +19,11 @@ export class MqttService implements OnModuleInit {
 
   constructor(
     private readonly redisService: TelemetryRedisService,
+    private readonly influxService: TelemetryInfluxService,
     private readonly prismaMysql: MariaDbService,
     private readonly spikeDetector: SpikeDetectorService,
     private readonly telemetryGateway: TelemetryGateway,
+    private readonly configService: ConfigService,
   ) {}
 
   async onModuleInit() {
@@ -27,10 +31,13 @@ export class MqttService implements OnModuleInit {
   }
 
   private async connectToBroker() {
-    const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
-    const clientId = process.env.MQTT_CLIENT_ID || 'imox_backend';
-    const username = process.env.MQTT_USER;
-    const password = process.env.MQTT_PASSWORD;
+    const brokerUrl =
+      this.configService.get<string>('MQTT_BROKER_URL') ||
+      'mqtt://localhost:1883';
+    const clientId =
+      this.configService.get<string>('MQTT_CLIENT_ID') || 'imox_backend';
+    const username = this.configService.get<string>('MQTT_USER');
+    const password = this.configService.get<string>('MQTT_PASSWORD');
 
     this.logger.log(`Conectando al broker MQTT: ${brokerUrl}`);
 
@@ -115,11 +122,23 @@ export class MqttService implements OnModuleInit {
         },
       });
 
+      // Cachear en Redis para acceso rápido
       await this.redisService.setTelemetryLast(iotId, data);
+
+      // Persistir en InfluxDB para historial de largo plazo
+      try {
+        await this.influxService.writeTelemetryPoint(iotId, data);
+      } catch (influxError) {
+        this.logger.error(
+          `Error escribiendo a InfluxDB para dispositivo ${iotId}:`,
+          influxError,
+        );
+        // No lanzamos el error para no interrumpir el flujo principal
+      }
 
       const baseline = await this.redisService.getBaseline(iotId);
 
-      const isBaselineValid = baseline && baseline.electricas;
+      const isBaselineValid = baseline?.electricas;
 
       const anomalyResult: any = isBaselineValid
         ? this.spikeDetector.detectAnomaly(data, baseline)
@@ -152,7 +171,7 @@ export class MqttService implements OnModuleInit {
 
   private extractIotIdFromTopic(topic: string): number {
     const parts = topic.split('/');
-    return parseInt(parts[2], 10);
+    return Number.parseInt(parts[2], 10);
   }
 
   async onModuleDestroy() {

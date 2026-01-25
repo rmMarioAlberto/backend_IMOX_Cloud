@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { createClient, RedisClientType } from 'redis';
 
 /**
@@ -17,8 +18,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client: RedisClientType;
   private readonly logger = new Logger(RedisService.name);
 
+  constructor(private readonly configService: ConfigService) {}
+
   async onModuleInit() {
-    const redisUrl = process.env.REDIS_URL;
+    const redisUrl = this.configService.get<string>('REDIS_URL');
 
     if (!redisUrl) {
       throw new Error('REDIS_URL environment variable is not defined');

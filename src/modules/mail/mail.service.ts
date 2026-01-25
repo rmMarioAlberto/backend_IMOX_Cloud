@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as Brevo from '@getbrevo/brevo';
 
 @Injectable()
@@ -6,18 +7,19 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly apiInstance: Brevo.TransactionalEmailsApi;
 
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
     this.apiInstance = new Brevo.TransactionalEmailsApi();
-    if (process.env.BREVO_API_KEY) {
+    const apiKey = this.configService.get<string>('BREVO_API_KEY');
+    if (apiKey) {
       this.apiInstance.setApiKey(
         Brevo.TransactionalEmailsApiApiKeys.apiKey,
-        process.env.BREVO_API_KEY,
+        apiKey,
       );
     }
   }
 
   async sendResetEmail(to: string, token: string) {
-    if (!process.env.BREVO_API_KEY) {
+    if (!this.configService.get<string>('BREVO_API_KEY')) {
       this.logger.warn(
         'BREVO_API_KEY no definida. Simulando envío de correo...',
       );
@@ -29,7 +31,8 @@ export class MailService {
     sendSmtpEmail.subject = 'Recuperación de Contraseña - IMOX Cloud';
     sendSmtpEmail.sender = {
       name: 'IMOX Cloud',
-      email: process.env.EMAIL_SENDER || 'no-reply@imox.cloud',
+      email:
+        this.configService.get<string>('EMAIL_SENDER') || 'no-reply@imox.cloud',
     };
     sendSmtpEmail.to = [{ email: to }];
     sendSmtpEmail.htmlContent = `

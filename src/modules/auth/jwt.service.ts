@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService as NestJwtService } from '@nestjs/jwt';
 
+import { ConfigService } from '@nestjs/config';
+
 @Injectable()
 export class JwtService {
-  constructor(private readonly jwtService: NestJwtService) {}
+  constructor(
+    private readonly jwtService: NestJwtService,
+    private readonly configService: ConfigService,
+  ) {}
 
   /**
    * Genera un Access Token (15 min)
@@ -11,8 +16,9 @@ export class JwtService {
    */
   async generateAccessToken(payload: any): Promise<string> {
     return this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_SECRET,
-      expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN || '15m') as any,
+      secret: this.configService.get<string>('JWT_SECRET'),
+      expiresIn: (this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') ||
+        '15m') as any,
     });
   }
 
@@ -21,8 +27,9 @@ export class JwtService {
    */
   async generateRefreshToken(payload: any): Promise<string> {
     return this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_SECRET,
-      expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as any,
+      secret: this.configService.get<string>('JWT_SECRET'),
+      expiresIn: (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ||
+        '7d') as any,
     });
   }
 
@@ -31,7 +38,7 @@ export class JwtService {
    */
   async verifyToken(token: string): Promise<any> {
     return await this.jwtService.verifyAsync(token, {
-      secret: process.env.JWT_SECRET,
+      secret: this.configService.get<string>('JWT_SECRET'),
     });
   }
 

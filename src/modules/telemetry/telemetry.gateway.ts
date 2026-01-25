@@ -11,8 +11,8 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { JwtService } from '../auth/jwt.service';
 import { MariaDbService } from '../database/mariadb.service';
-import { RedisService } from '../database/redis.service';
-import { InfluxDbService } from '../database/influxdb.service';
+import { TelemetryRedisService } from '../database/telemetry/telemetry-redis.service';
+import { TelemetryInfluxService } from '../database/telemetry/telemetry-influx.service';
 import { TelemetryResponseDto } from './dto/telemetry-response.dto';
 import { toTelemetryResponse } from './utils/telemetry.mapper';
 
@@ -33,8 +33,8 @@ export class TelemetryGateway
   constructor(
     private readonly jwtService: JwtService,
     private readonly prismaMysql: MariaDbService,
-    private readonly redisService: RedisService,
-    private readonly prismaMongo: InfluxDbService,
+    private readonly redisService: TelemetryRedisService,
+    private readonly telemetryInfluxService: TelemetryInfluxService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -64,98 +64,104 @@ export class TelemetryGateway
     this.logger.log(`Cliente desconectado: ${client.id}`);
   }
 
-  // @SubscribeMessage('subscribeToDevice')
-  // async handleSubscribeToDevice(
-  //   @ConnectedSocket() client: Socket,
-  //   @MessageBody() data: { iotId: number },
-  // ) {
-  //   const iotId = data.iotId;
-  //   if (!iotId) return;
+  @SubscribeMessage('subscribeToDevice')
+  async handleSubscribeToDevice(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { iotId: number },
+  ) {
+    const iotId = data.iotId;
+    if (!iotId) return;
 
-  //   try {
-  //     const user = client.data.user;
-  //     if (!user) {
-  //       client.emit('error', { message: 'Unauthorized' });
-  //       return;
-  //     }
+    try {
+      const user = client.data.user;
+      if (!user) {
+        client.emit('error', { message: 'Unauthorized' });
+        return;
+      }
 
-  //     const device = await this.prismaMysql.iot.findUnique({
-  //       where: { id: iotId },
-  //       select: { user_id: true },
-  //     });
+      const device = await this.prismaMysql.iot.findUnique({
+        where: { id: iotId },
+        select: { user_id: true },
+      });
 
-  //     if (!device) {
-  //       client.emit('error', { message: 'Device not found' });
-  //       return;
-  //     }
+      if (!device) {
+        client.emit('error', { message: 'Device not found' });
+        return;
+      }
 
-  //     const isOwner = device.user_id === user.sub;
+      // Allow access if user owns the device OR if user is admin (optional, sticking to owner for now based on previous code)
+      const isOwner = device.user_id === user.sub;
 
-  //     if (!isOwner) {
-  //       this.logger.warn(
-  //         `Acceso denegado: Usuario ${user.sub} intentó suscribirse a dispositivo ${iotId}`,
-  //       );
-  //       client.emit('exception', {
-  //         status: 'error',
-  //         message: 'Forbidden: You do not own this device',
-  //       });
-  //       return;
-  //     }
+      if (!isOwner) {
+        this.logger.warn(
+          `Acceso denegado: Usuario ${user.sub} intentó suscribirse a dispositivo ${iotId}`,
+        );
+        client.emit('exception', {
+          status: 'error',
+          message: 'Forbidden: You do not own this device',
+        });
+        return;
+      }
 
-  //     const roomName = `device:${iotId}`;
-  //     client.join(roomName);
+      const roomName = `device:${iotId}`;
+      client.join(roomName);
 
-  //     let lastTelemetry: TelemetryResponseDto | null = null;
-  //     const redisData = await this.redisService.getTelemetryLast(iotId);
+      let lastTelemetry: TelemetryResponseDto | null = null;
+      const redisData = await this.redisService.getTelemetryLast(iotId);
 
-  //     if (redisData) {
-  //       lastTelemetry = toTelemetryResponse(
-  //         redisData,
-  //         false,
-  //         redisData.anomaly_type,
-  //       );
-  //     } else if (device.user_id) {
-  //       const mongoTelemetry = await this.prismaMongo.telemetry.findUnique({
-  //         where: {
-  //           iotId_userId: {
-  //             iotId: iotId,
-  //             userId: device.user_id,
-  //           },
-  //         },
-  //       });
+      if (redisData) {
+        lastTelemetry = toTelemetryResponse(
+          redisData,
+          false,
+          redisData.anomaly_type,
+        );
+      } else {
+        // Fallback to InfluxDB if not in Redis
+        const influxData =
+          await this.telemetryInfluxService.queryLatestTelemetry(iotId);
 
-  //       if (mongoTelemetry && mongoTelemetry.readings.length > 0) {
-  //         const lastReading = mongoTelemetry.readings.at(-1);
-  //         if (lastReading) {
-  //           const mqttDto = {
-  //             electricas: lastReading.electricas,
-  //             diagnostico: lastReading.diagnostico,
-  //             timestamp: lastReading.timestamp.toISOString(),
-  //           } as any;
+        if (influxData) {
+          // Map InfluxDB result to TelemetryResponseDto
+          // InfluxDB returns flat object: { _time, voltaje_v, ... }
+          const mappedData = {
+            electricas: {
+              voltaje_v: influxData.voltaje_v,
+              corriente_a: influxData.corriente_a,
+              potencia_w: influxData.potencia_w,
+              energia_kwh: influxData.energia_kwh,
+              frecuencia_hz: influxData.frecuencia_hz,
+              factor_potencia: influxData.factor_potencia,
+            },
+            diagnostico: {
+              rssi_dbm: influxData.rssi_dbm,
+              uptime_s: influxData.uptime_s,
+              // ip and pzem_status might be tags or fields depending on write implementation
+              // stored as tags in writeTelemetryPoint
+              ip: influxData.ip,
+              pzem_status: influxData.pzem_status,
+            },
+            timestamp: influxData._time,
+            anomaly_type: influxData.anomaly_type,
+          };
 
-  //           lastTelemetry = toTelemetryResponse(
-  //             mqttDto,
-  //             lastReading.type === 'critical',
-  //             lastReading.anomaly_type as
-  //               | 'SPIKE'
-  //               | 'LIMIT'
-  //               | 'NONE'
-  //               | undefined,
-  //           );
-  //         }
-  //       }
-  //     }
+          lastTelemetry = toTelemetryResponse(
+            mappedData as any,
+            influxData.anomaly_type && influxData.anomaly_type !== 'NONE',
+            influxData.anomaly_type,
+          );
+        }
+      }
 
-  //     if (lastTelemetry) {
-  //       client.emit('telemetry', lastTelemetry);
-  //     }
+      if (lastTelemetry) {
+        client.emit('telemetry', lastTelemetry);
+      }
 
-  //     return { event: 'subscribed', data: { room: roomName } };
-  //   } catch (error) {
-  //     this.logger.error(`Error en suscripción: ${error.message}`);
-  //     client.emit('error', { message: 'Internal Server Error' });
-  //   }
-  // }
+      return { event: 'subscribed', data: { room: roomName } };
+    } catch (error) {
+      this.logger.error(`Error en suscripción: ${error.message}`);
+      client.emit('error', { message: 'Internal Server Error' });
+    }
+  }
 
   @SubscribeMessage('unsubscribeFromDevice')
   handleUnsubscribeFromDevice(

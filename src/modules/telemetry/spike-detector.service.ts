@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import { MqttTelemetryDto } from '../mqtt/dto/mqtt.dto';
 
@@ -10,17 +11,21 @@ export interface AnomalyResult {
 
 @Injectable()
 export class SpikeDetectorService {
-  private readonly threshold = parseFloat(
-    process.env.TELEMETRY_SPIKE_THRESHOLD || '0.15',
-  );
+  private readonly threshold: number;
+  private readonly maxVoltage: number;
+  private readonly minVoltage: number;
 
-  private readonly maxVoltage = parseFloat(
-    process.env.TELEMETRY_VOLTAGE_MAX || '140',
-  );
-
-  private readonly minVoltage = parseFloat(
-    process.env.TELEMETRY_VOLTAGE_MIN || '90',
-  );
+  constructor(private readonly configService: ConfigService) {
+    this.threshold = parseFloat(
+      this.configService.get<string>('TELEMETRY_SPIKE_THRESHOLD') || '0.15',
+    );
+    this.maxVoltage = parseFloat(
+      this.configService.get<string>('TELEMETRY_VOLTAGE_MAX') || '140',
+    );
+    this.minVoltage = parseFloat(
+      this.configService.get<string>('TELEMETRY_VOLTAGE_MIN') || '90',
+    );
+  }
 
   detectAnomaly(
     current: MqttTelemetryDto,
