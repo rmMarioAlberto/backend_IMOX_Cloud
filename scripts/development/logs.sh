@@ -1,10 +1,14 @@
 #!/bin/bash
 
 # Script para ver logs de servicios Docker
-# Uso: ./scripts/logs.sh [servicio]
-#      ./scripts/logs.sh              (todos los servicios)
-#      ./scripts/logs.sh nestjs       (solo backend)
-#      ./scripts/logs.sh mosquitto    (solo MQTT)
+# Uso: ./scripts/development/logs.sh [servicio]
+#      ./scripts/development/logs.sh              (todos los servicios)
+#      ./scripts/development/logs.sh nestjs       (solo backend)
+#      ./scripts/development/logs.sh mosquitto    (solo MQTT)
+
+# Directorios
+PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+DOCKER_DIR="$PROJECT_ROOT/docker"
 
 # Detectar comando de docker compose
 if command -v docker-compose &> /dev/null; then
@@ -16,14 +20,12 @@ else
     exit 1
 fi
 
-cd "$(dirname "$0")/../docker"
-
 if [ -z "$1" ]; then
     echo "📋 Mostrando logs de TODOS los servicios (Ctrl+C para salir)..."
     echo ""
-    $DOCKER_COMPOSE logs -f --tail=100
+    $DOCKER_COMPOSE -f "$DOCKER_DIR/docker-compose.yml" logs -f --tail=100
 else
     echo "📋 Mostrando logs de: $1 (Ctrl+C para salir)..."
     echo ""
-    $DOCKER_COMPOSE logs -f --tail=100 "$1"
+    $DOCKER_COMPOSE -f "$DOCKER_DIR/docker-compose.yml" logs -f --tail=100 "$1"
 fi

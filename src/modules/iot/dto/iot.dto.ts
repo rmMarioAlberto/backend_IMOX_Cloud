@@ -106,3 +106,51 @@ export class ResponseHistoryLightweightDto {
   @Expose()
   data: any[][];
 }
+
+@Exclude()
+export class IotDeviceDto {
+  @ApiProperty({
+    example: 1,
+    description: 'IoT device ID',
+  })
+  @Expose()
+  id: number;
+
+  @ApiProperty({
+    example: '00:1A:7D:DA:71:13',
+    description: 'MAC Address',
+  })
+  @Expose({ name: 'mac_address' })
+  macAddress: string;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Status (1 = active, 0 = inactive)',
+  })
+  @Expose()
+  status: number;
+
+  @ApiProperty({
+    example: '2025-12-30T10:38:09.000Z',
+    description: 'Created At',
+  })
+  @Expose({ name: 'created_at' })
+  createdAt: Date;
+
+  @ApiProperty({
+    example: '2025-12-30T10:38:09.000Z',
+    description: 'Updated At',
+  })
+  @Expose({ name: 'updated_at' })
+  updatedAt: Date;
+}
+
+@Exclude()
+export class ResponseIotListDto {
+  @ApiProperty({
+    type: [IotDeviceDto],
+    description: 'List of IoT devices',
+  })
+  @Expose()
+  devices: IotDeviceDto[];
+}

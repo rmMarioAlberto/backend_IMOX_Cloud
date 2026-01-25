@@ -149,7 +149,7 @@ export class TelemetryScheduler {
     try {
       const deviceKeys = await this.redisService.keys('iot:*:last');
       const offlineThreshold =
-        parseInt(
+        Number.parseInt(
           this.configService.get<string>('TELEMETRY_OFFLINE_TIMEOUT_MIN') ||
             '10',
           10,
@@ -187,6 +187,6 @@ export class TelemetryScheduler {
   private extractIotId(key: string): number {
     // Key format: iot:{id}:last
     const parts = key.split(':');
-    return parseInt(parts[1], 10);
+    return Number.parseInt(parts[1], 10);
   }
 }

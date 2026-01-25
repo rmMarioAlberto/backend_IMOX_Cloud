@@ -125,17 +125,6 @@ export class MqttService implements OnModuleInit {
       // Cachear en Redis para acceso rápido
       await this.redisService.setTelemetryLast(iotId, data);
 
-      // Persistir en InfluxDB para historial de largo plazo
-      try {
-        await this.influxService.writeTelemetryPoint(iotId, data);
-      } catch (influxError) {
-        this.logger.error(
-          `Error escribiendo a InfluxDB para dispositivo ${iotId}:`,
-          influxError,
-        );
-        // No lanzamos el error para no interrumpir el flujo principal
-      }
-
       const baseline = await this.redisService.getBaseline(iotId);
 
       const isBaselineValid = baseline?.electricas;

@@ -72,3 +72,4 @@ docker/mqtt/acl_file
 
 #sonar
 sonar-project.properties
+docker/mqtt/mosquitto.prod.conf

@@ -1,9 +1,13 @@
 #!/bin/bash
 
 # Script para detener todos los servicios Docker
-# Uso: ./scripts/stop-all.sh [--remove-volumes]
+# Uso: ./scripts/development/stop-all.sh [--remove-volumes]
 
 set -e
+
+# Directorios
+PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+DOCKER_DIR="$PROJECT_ROOT/docker"
 
 echo "Deteniendo servicios IMOX Cloud..."
 
@@ -17,21 +21,18 @@ else
     exit 1
 fi
 
-# Cambiar al directorio correcto
-cd "$(dirname "$0")/../docker"
-
 # Verificar si se debe eliminar volúmenes
 if [ "$1" == "--remove-volumes" ] || [ "$1" == "-v" ]; then
     echo "Eliminando contenedores y volúmenes..."
-    $DOCKER_COMPOSE --env-file ../.env down -v
+    $DOCKER_COMPOSE -f "$DOCKER_DIR/docker-compose.yml" down -v
     echo "Contenedores y volúmenes eliminados."
 else
     echo "Deteniendo contenedores (volúmenes preservados)..."
-    $DOCKER_COMPOSE --env-file ../.env down
+    $DOCKER_COMPOSE -f "$DOCKER_DIR/docker-compose.yml" down
     echo "Contenedores detenidos."
     echo ""
     echo "Para eliminar también los volúmenes (DATOS PERDIDOS):"
-    echo "   ./scripts/stop-all.sh --remove-volumes"
+    echo "   ./scripts/development/stop-all.sh --remove-volumes"
 fi
 
 echo ""

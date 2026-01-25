@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   HttpCode,
   HttpStatus,
   Body,
@@ -14,6 +15,7 @@ import {
   SoftResetIotDto,
   GetHistoryDto,
   ResponseHistoryLightweightDto,
+  ResponseIotListDto,
 } from './dto/iot.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
 import { ResponseMessage } from '../../common/utils/dto/utils.dto';
@@ -72,6 +74,21 @@ export class IotController {
     @GetUser() user: UserPayloadDto,
   ): Promise<ResponseMessage> {
     return this.iotService.linkIotUser(linkIotUserDto, user);
+  }
+
+  @Get('list')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get all IoT devices for the authenticated user (private)',
+  })
+  @ApiOkResponse({
+    description: 'List of IoT devices successfully retrieved.',
+    type: ResponseIotListDto,
+  })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  getIots(@GetUser() user: UserPayloadDto): Promise<ResponseIotListDto> {
+    return this.iotService.getIotsByUser(user);
   }
 
   @Post('soft-reset')

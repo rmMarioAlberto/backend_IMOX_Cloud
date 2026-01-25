@@ -11,6 +11,8 @@ import {
   SoftResetIotDto,
   ResponseHistoryLightweightDto,
   GetHistoryDto,
+  IotDeviceDto,
+  ResponseIotListDto,
 } from './dto/iot.dto';
 import { MariaDbService } from '../database/mariadb.service';
 import { ResponseMessage } from '../../common/utils/dto/utils.dto';
@@ -132,6 +134,31 @@ export class IotService {
     };
   }
 
+  async getIotsByUser(user: UserPayloadDto): Promise<ResponseIotListDto> {
+    const { id } = user;
+
+    const iots = await this.prismaMysql.iot.findMany({
+      where: {
+        user_id: id,
+        status: 1,
+      },
+      select: {
+        id: true,
+        mac_address: true,
+        status: true,
+        created_at: true,
+        updated_at: true,
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+
+    const devices = plainToInstance(IotDeviceDto, iots);
+
+    return { devices };
+  }
+
   async getDeviceHistory(
     dto: GetHistoryDto,
     user: UserPayloadDto,
@@ -206,10 +233,6 @@ export class IotService {
     }
   }
 
-  /**
-   * Eliminar todos los datos de telemetría de un dispositivo
-   * Utilizado durante el soft reset
-   */
   private async deleteTelemetryData(iotId: number): Promise<void> {
     try {
       await this.telemetryInfluxService.deleteTelemetryByIotId(iotId);
