@@ -29,94 +29,7 @@ export class TelemetryScheduler {
 
       for (const key of deviceKeys) {
         const iotId = this.extractIotId(key);
-
-        const lastReading = await this.redisService.getTelemetryLast(iotId);
-
-        const criticalEvents = await this.redisService.getCriticalEvents(iotId);
-
-        if (!lastReading && criticalEvents.length === 0) {
-          continue;
-        }
-
-        const device = await this.prismaMysql.iot.findUnique({
-          where: { id: iotId },
-          select: { user_id: true },
-        });
-
-        if (!device || !device.user_id) {
-          this.logger.warn(
-            `Dispositivo ${iotId} sin user_id asignado, saltando...`,
-          );
-          continue;
-        }
-
-        const readings: TelemetryReadingDto[] = [];
-
-        for (const event of criticalEvents) {
-          readings.push({
-            type: 'critical',
-            anomaly_type: event.anomaly_type,
-            electricas: {
-              voltaje_v: event.electricas?.voltaje_v ?? null,
-              corriente_a: event.electricas?.corriente_a ?? null,
-              potencia_w: event.electricas?.potencia_w ?? null,
-              energia_kwh: event.electricas?.energia_kwh ?? null,
-              frecuencia_hz: event.electricas?.frecuencia_hz ?? null,
-              factor_potencia: event.electricas?.factor_potencia ?? null,
-            },
-            diagnostico: {
-              ip: event.diagnostico?.ip ?? 'unknown',
-              rssi_dbm: event.diagnostico?.rssi_dbm ?? 0,
-              pzem_status: event.diagnostico?.pzem_status ?? 'unknown',
-              uptime_s: event.diagnostico?.uptime_s ?? 0,
-            },
-            timestamp: new Date(event.timestamp || Date.now()),
-          });
-        }
-
-        if (lastReading) {
-          readings.push({
-            type: 'normal',
-            electricas: {
-              voltaje_v: lastReading.electricas?.voltaje_v ?? null,
-              corriente_a: lastReading.electricas?.corriente_a ?? null,
-              potencia_w: lastReading.electricas?.potencia_w ?? null,
-              energia_kwh: lastReading.electricas?.energia_kwh ?? null,
-              frecuencia_hz: lastReading.electricas?.frecuencia_hz ?? null,
-              factor_potencia: lastReading.electricas?.factor_potencia ?? null,
-            },
-            diagnostico: {
-              ip: lastReading.diagnostico?.ip ?? 'unknown',
-              rssi_dbm: lastReading.diagnostico?.rssi_dbm ?? 0,
-              pzem_status: lastReading.diagnostico?.pzem_status ?? 'unknown',
-              uptime_s: lastReading.diagnostico?.uptime_s ?? 0,
-            },
-            timestamp: new Date(),
-          });
-        }
-
-        if (readings.length === 0) {
-          continue;
-        }
-
-        // Persistir en InfluxDB (Backup/Snapshot)
-        // Nota: Los datos ya se escriben en tiempo real vía MQTT, pero esto asegura
-        // que los eventos críticos acumulados y el snapshot de "última lectura"
-        // queden registrados históricamente. InfluxDB maneja duplicados por timestamp.
-
-        for (const reading of readings) {
-          await this.telemetryInfluxService.writeTelemetryPoint(iotId, {
-            electricas: reading.electricas,
-            diagnostico: reading.diagnostico,
-            timestamp: reading.timestamp
-              ? reading.timestamp.toISOString()
-              : new Date().toISOString(),
-            anomaly_type:
-              reading.type === 'critical' ? reading.anomaly_type : undefined,
-          } as any);
-        }
-
-        await this.redisService.clearCriticalEvents(iotId);
+        await this.processDevice(iotId);
       }
 
       this.logger.log(
@@ -124,6 +37,105 @@ export class TelemetryScheduler {
       );
     } catch (error) {
       this.logger.error('Error en persistencia programada:', error);
+    }
+  }
+
+  private async processDevice(iotId: number) {
+    const lastReading = await this.redisService.getTelemetryLast(iotId);
+    const criticalEvents = await this.redisService.getCriticalEvents(iotId);
+
+    if (!lastReading && criticalEvents.length === 0) {
+      return;
+    }
+
+    const device = await this.prismaMysql.iot.findUnique({
+      where: { id: iotId },
+      select: { user_id: true },
+    });
+
+    if (!device?.user_id) {
+      this.logger.warn(
+        `Dispositivo ${iotId} sin user_id asignado, saltando...`,
+      );
+      return;
+    }
+
+    const readings = this.transformToReadings(criticalEvents, lastReading);
+
+    if (readings.length === 0) {
+      return;
+    }
+
+    await this.saveReadingsToInflux(iotId, readings);
+    await this.redisService.clearCriticalEvents(iotId);
+  }
+
+  private transformToReadings(
+    criticalEvents: any[],
+    lastReading: any,
+  ): TelemetryReadingDto[] {
+    const readings: TelemetryReadingDto[] = [];
+
+    for (const event of criticalEvents) {
+      readings.push({
+        type: 'critical',
+        anomaly_type: event.anomaly_type,
+        electricas: {
+          voltaje_v: event.electricas?.voltaje_v ?? null,
+          corriente_a: event.electricas?.corriente_a ?? null,
+          potencia_w: event.electricas?.potencia_w ?? null,
+          energia_kwh: event.electricas?.energia_kwh ?? null,
+          frecuencia_hz: event.electricas?.frecuencia_hz ?? null,
+          factor_potencia: event.electricas?.factor_potencia ?? null,
+        },
+        diagnostico: {
+          ip: event.diagnostico?.ip ?? 'unknown',
+          rssi_dbm: event.diagnostico?.rssi_dbm ?? 0,
+          pzem_status: event.diagnostico?.pzem_status ?? 'unknown',
+          uptime_s: event.diagnostico?.uptime_s ?? 0,
+        },
+        timestamp: new Date(event.timestamp || Date.now()),
+      });
+    }
+
+    if (lastReading) {
+      readings.push({
+        type: 'normal',
+        electricas: {
+          voltaje_v: lastReading.electricas?.voltaje_v ?? null,
+          corriente_a: lastReading.electricas?.corriente_a ?? null,
+          potencia_w: lastReading.electricas?.potencia_w ?? null,
+          energia_kwh: lastReading.electricas?.energia_kwh ?? null,
+          frecuencia_hz: lastReading.electricas?.frecuencia_hz ?? null,
+          factor_potencia: lastReading.electricas?.factor_potencia ?? null,
+        },
+        diagnostico: {
+          ip: lastReading.diagnostico?.ip ?? 'unknown',
+          rssi_dbm: lastReading.diagnostico?.rssi_dbm ?? 0,
+          pzem_status: lastReading.diagnostico?.pzem_status ?? 'unknown',
+          uptime_s: lastReading.diagnostico?.uptime_s ?? 0,
+        },
+        timestamp: new Date(),
+      });
+    }
+
+    return readings;
+  }
+
+  private async saveReadingsToInflux(
+    iotId: number,
+    readings: TelemetryReadingDto[],
+  ) {
+    for (const reading of readings) {
+      await this.telemetryInfluxService.writeTelemetryPoint(iotId, {
+        electricas: reading.electricas,
+        diagnostico: reading.diagnostico,
+        timestamp: reading.timestamp
+          ? reading.timestamp.toISOString()
+          : new Date().toISOString(),
+        anomaly_type:
+          reading.type === 'critical' ? reading.anomaly_type : undefined,
+      } as any);
     }
   }
 

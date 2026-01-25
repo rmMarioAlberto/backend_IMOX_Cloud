@@ -24,7 +24,7 @@ import {
   ResetPasswordDto,
   ResetPasswordResponseDto,
 } from './dto/auth.dto';
-import { responseMessage } from '../../common/utils/dto/utils.dto';
+import { ResponseMessage } from '../../common/utils/dto/utils.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @ApiTags('Auth')
@@ -66,13 +66,13 @@ export class AuthController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Sesión cerrada exitosamente',
-    type: responseMessage,
+    type: ResponseMessage,
   })
   @ApiBearerAuth()
   logout(
     @Req() req: any,
     @Body() logoutUserDto: LogoutUserDto,
-  ): Promise<responseMessage> {
+  ): Promise<ResponseMessage> {
     const accessToken = req.headers.authorization;
     return this.authService.logout(
       req.user.id,

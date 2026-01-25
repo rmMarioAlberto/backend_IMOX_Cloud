@@ -19,7 +19,7 @@ import {
   EditProfileDto,
 } from './dto/user.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
-import { responseMessage } from '../../common/utils/dto/utils.dto';
+import { ResponseMessage } from '../../common/utils/dto/utils.dto';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -93,12 +93,12 @@ export class UserController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Perfil actualizado exitosamente.',
-    type: responseMessage,
+    type: ResponseMessage,
   })
   async editProfile(
     @Body() dto: EditProfileDto,
     @GetUser() user: UserPayloadDto,
-  ): Promise<responseMessage> {
+  ): Promise<ResponseMessage> {
     return this.userService.editProfile(dto, user.id);
   }
 }

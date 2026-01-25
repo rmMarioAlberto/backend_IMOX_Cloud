@@ -13,7 +13,7 @@ import { UserPayloadDto } from '../auth/dto/auth.dto';
 import { MariaDbService } from '../database/mariadb.service';
 import { plainToInstance } from 'class-transformer';
 import { hash } from 'bcrypt';
-import { responseMessage } from 'src/common/utils/dto/utils.dto';
+import { ResponseMessage } from 'src/common/utils/dto/utils.dto';
 
 @Injectable()
 export class UserService {
@@ -62,7 +62,7 @@ export class UserService {
   async editProfile(
     dto: EditProfileDto,
     userId: number,
-  ): Promise<responseMessage> {
+  ): Promise<ResponseMessage> {
     const { name } = dto;
 
     await this.mariaDbService.users.update({

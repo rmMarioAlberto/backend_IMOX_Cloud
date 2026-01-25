@@ -15,7 +15,7 @@ import {
   ResetPasswordDto,
   ResetPasswordResponseDto,
 } from './dto/auth.dto';
-import { responseMessage } from '../../common/utils/dto/utils.dto';
+import { ResponseMessage } from '../../common/utils/dto/utils.dto';
 import { MariaDbService } from '../database/mariadb.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from './jwt.service';
@@ -78,7 +78,7 @@ export class AuthService {
     userId: number,
     deviceId: string | undefined,
     accessToken?: string,
-  ): Promise<responseMessage> {
+  ): Promise<ResponseMessage> {
     const targetDevice = deviceId || 'mobile_app_default';
     await this.redisService.deleteRefreshToken(userId, targetDevice);
 

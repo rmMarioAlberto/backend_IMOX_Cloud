@@ -16,13 +16,13 @@ export class SpikeDetectorService {
   private readonly minVoltage: number;
 
   constructor(private readonly configService: ConfigService) {
-    this.threshold = parseFloat(
+    this.threshold = Number.parseFloat(
       this.configService.get<string>('TELEMETRY_SPIKE_THRESHOLD') || '0.15',
     );
-    this.maxVoltage = parseFloat(
+    this.maxVoltage = Number.parseFloat(
       this.configService.get<string>('TELEMETRY_VOLTAGE_MAX') || '140',
     );
-    this.minVoltage = parseFloat(
+    this.minVoltage = Number.parseFloat(
       this.configService.get<string>('TELEMETRY_VOLTAGE_MIN') || '90',
     );
   }
@@ -56,7 +56,7 @@ export class SpikeDetectorService {
     }
 
     // 2. Detección de Picos Relativos
-    if (!baseline || !baseline.electricas) {
+    if (!baseline?.electricas) {
       return { isCritical: false, type: 'NONE' };
     }
 

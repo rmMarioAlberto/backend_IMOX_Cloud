@@ -11,6 +11,15 @@ import { Response, Request } from 'express';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 
+interface ErrorResponse {
+  statusCode: number;
+  message: string | object;
+  errorCode?: string;
+  path?: string;
+  timestamp?: string;
+  stack?: string;
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
@@ -22,106 +31,132 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
+    const { status, message, errorCode } = this.handleException(exception);
+
+    // Logging
+    this.logError(exception, request, status, message, errorCode);
+
+    // Response construction
+    const errorResponse: ErrorResponse = {
+      statusCode: status,
+      message,
+      path: request.url,
+      timestamp: new Date().toISOString(),
+    };
+
+    if (errorCode) {
+      errorResponse.errorCode = errorCode;
+    }
+
+    // Add stack trace in non-production environments
+    if (this.isDev() && exception instanceof Error) {
+      errorResponse.stack = exception.stack;
+    }
+
+    response.status(status).json(errorResponse);
+  }
+
+  private handleException(exception: unknown): {
+    status: number;
+    message: string | object;
+    errorCode?: string;
+  } {
+    if (exception instanceof HttpException) {
+      return this.handleHttpException(exception);
+    }
+    if (exception instanceof PrismaClientKnownRequestError) {
+      return this.handlePrismaException(exception);
+    }
+    if (
+      exception instanceof TokenExpiredError ||
+      exception instanceof JsonWebTokenError
+    ) {
+      return this.handleJwtException(exception);
+    }
+    if (exception instanceof Error && exception.name === 'ValidationError') {
+      return this.handleValidationException();
+    }
+    return this.handleGenericException(exception);
+  }
+
+  private handleHttpException(exception: HttpException) {
+    const status = exception.getStatus();
+    const res = exception.getResponse();
+    const message = typeof res === 'string' ? res : (res as any).message;
+    return { status, message };
+  }
+
+  private handlePrismaException(exception: PrismaClientKnownRequestError) {
+    let status = HttpStatus.BAD_REQUEST;
+    let message = `Error de base de datos (${exception.code}).`;
+    const errorCode = exception.code;
+
+    switch (exception.code) {
+      case 'P2002':
+        status = HttpStatus.CONFLICT;
+        message = 'Registro duplicado (violación de restricción única).';
+        break;
+      case 'P2003':
+        message = 'Violación de clave foránea.';
+        break;
+      case 'P2025':
+        status = HttpStatus.NOT_FOUND;
+        message = 'El registro solicitado no existe.';
+        break;
+      case 'P2014':
+        message = 'Violación de relación requerida.';
+        break;
+      case 'P2000':
+        message = 'El valor proporcionado es demasiado largo para el campo.';
+        break;
+      case 'P2001':
+      case 'P2015':
+        status = HttpStatus.NOT_FOUND;
+        message = 'Registro no encontrado o condición no cumplida.';
+        break;
+      case 'P2016':
+        message = 'Error de interpretación de consulta.';
+        break;
+      case 'P2021':
+      case 'P2022':
+        status = HttpStatus.INTERNAL_SERVER_ERROR;
+        message = 'Error de esquema de base de datos.';
+        break;
+    }
+
+    return { status, message, errorCode };
+  }
+
+  private handleJwtException(exception: TokenExpiredError | JsonWebTokenError) {
+    if (exception instanceof TokenExpiredError) {
+      return {
+        status: HttpStatus.UNAUTHORIZED,
+        message: 'Token expirado. Por favor, inicia sesión nuevamente.',
+        errorCode: 'TOKEN_EXPIRED',
+      };
+    }
+    return {
+      status: HttpStatus.UNAUTHORIZED,
+      message: 'Token inválido.',
+      errorCode: 'INVALID_TOKEN',
+    };
+  }
+
+  private handleValidationException() {
+    return {
+      status: HttpStatus.BAD_REQUEST,
+      message: 'Error de validación de datos.',
+      errorCode: 'VALIDATION_ERROR',
+    };
+  }
+
+  private handleGenericException(exception: unknown) {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | object = 'Error interno del servidor';
-    let errorCode: string | undefined = undefined;
+    let errorCode: string | undefined;
 
-    // 1. HTTP Exceptions (NestJS)
-    if (exception instanceof HttpException) {
-      status = exception.getStatus();
-      const res = exception.getResponse();
-      message = typeof res === 'string' ? res : (res as any).message;
-    }
-
-    // 2. Prisma Database Errors
-    else if (exception instanceof PrismaClientKnownRequestError) {
-      const prismaError = exception as PrismaClientKnownRequestError;
-      errorCode = prismaError.code;
-
-      switch (prismaError.code) {
-        case 'P2002':
-          status = HttpStatus.CONFLICT;
-          message = 'Registro duplicado (violación de restricción única).';
-          break;
-
-        case 'P2003':
-          status = HttpStatus.BAD_REQUEST;
-          message = 'Violación de clave foránea.';
-          break;
-
-        case 'P2025':
-          status = HttpStatus.NOT_FOUND;
-          message = 'El registro solicitado no existe.';
-          break;
-
-        case 'P2014':
-          status = HttpStatus.BAD_REQUEST;
-          message = 'Violación de relación requerida.';
-          break;
-
-        case 'P2000':
-          status = HttpStatus.BAD_REQUEST;
-          message = 'El valor proporcionado es demasiado largo para el campo.';
-          break;
-
-        case 'P2001':
-          status = HttpStatus.NOT_FOUND;
-          message = 'El registro buscado en la condición no existe.';
-          break;
-
-        case 'P2015':
-          status = HttpStatus.NOT_FOUND;
-          message = 'Registro relacionado no encontrado.';
-          break;
-
-        case 'P2016':
-          status = HttpStatus.BAD_REQUEST;
-          message = 'Error de interpretación de consulta.';
-          break;
-
-        case 'P2021':
-          status = HttpStatus.INTERNAL_SERVER_ERROR;
-          message = 'La tabla no existe en la base de datos.';
-          break;
-
-        case 'P2022':
-          status = HttpStatus.INTERNAL_SERVER_ERROR;
-          message = 'La columna no existe en la base de datos.';
-          break;
-
-        default:
-          status = HttpStatus.BAD_REQUEST;
-          message = `Error de base de datos (${prismaError.code}).`;
-          break;
-      }
-    }
-
-    // 3. JWT Errors
-    else if (exception instanceof TokenExpiredError) {
-      status = HttpStatus.UNAUTHORIZED;
-      message = 'Token expirado. Por favor, inicia sesión nuevamente.';
-      errorCode = 'TOKEN_EXPIRED';
-    } else if (exception instanceof JsonWebTokenError) {
-      status = HttpStatus.UNAUTHORIZED;
-      message = 'Token inválido.';
-      errorCode = 'INVALID_TOKEN';
-    }
-
-    // 4. Validation Errors (class-validator)
-    else if (
-      exception instanceof Error &&
-      exception.name === 'ValidationError'
-    ) {
-      status = HttpStatus.BAD_REQUEST;
-      message = 'Error de validación de datos.';
-      errorCode = 'VALIDATION_ERROR';
-    }
-
-    // 5. Generic Errors
-    else if (exception instanceof Error) {
-      message = exception.message;
-
-      // Detectar errores comunes por mensaje
+    if (exception instanceof Error) {
+      // Allow specific system errors to be exposed with friendly messages
       if (exception.message.includes('ECONNREFUSED')) {
         status = HttpStatus.SERVICE_UNAVAILABLE;
         message = 'Servicio no disponible. Intenta más tarde.';
@@ -130,11 +165,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
         status = HttpStatus.REQUEST_TIMEOUT;
         message = 'Tiempo de espera agotado.';
         errorCode = 'TIMEOUT';
+      } else if (this.isDev()) {
+        // In development, show the actual error message
+        message = exception.message;
       }
     }
 
-    // Log del error
-    const errorLog = {
+    return { status, message, errorCode };
+  }
+
+  private logError(
+    exception: unknown,
+    request: Request,
+    status: number,
+    message: string | object,
+    errorCode?: string,
+  ) {
+    const errorLog: any = {
       path: request.url,
       method: request.method,
       status,
@@ -145,32 +192,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
     };
 
-    if (this.configService.get('NODE_ENV') !== 'production') {
-      errorLog['stack'] = (exception as Error)?.stack;
+    if (this.isDev() && exception instanceof Error) {
+      errorLog.stack = exception.stack;
     }
 
     this.logger.error(errorLog);
+  }
 
-    // Respuesta al cliente
-    const errorResponse: any = {
-      statusCode: status,
-      message,
-      path: request.url,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Solo incluir errorCode si existe
-    if (errorCode) {
-      errorResponse.errorCode = errorCode;
-    }
-
-    if (
-      this.configService.get('NODE_ENV') !== 'production' &&
-      (exception as Error)?.stack
-    ) {
-      errorResponse.stack = (exception as Error).stack;
-    }
-
-    response.status(status).json(errorResponse);
+  private isDev(): boolean {
+    return this.configService.get('NODE_ENV') !== 'production';
   }
 }

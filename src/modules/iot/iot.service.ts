@@ -2,19 +2,20 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import {
-  createIotDto,
-  linkIotUserDto,
-  responseIotDto,
-  softResetIotDto,
+  CreateIotDto,
+  LinkIotUserDto,
+  ResponseIotDto,
+  SoftResetIotDto,
   ResponseHistoryLightweightDto,
   GetHistoryDto,
 } from './dto/iot.dto';
 import { MariaDbService } from '../database/mariadb.service';
-import { responseMessage } from '../../common/utils/dto/utils.dto';
+import { ResponseMessage } from '../../common/utils/dto/utils.dto';
 import { plainToInstance } from 'class-transformer';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { InfluxDbService } from '../database/influxdb.service';
 import { TelemetryInfluxService } from '../database/telemetry/telemetry-influx.service';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
@@ -28,7 +29,9 @@ export class IotService {
     private readonly telemetryInfluxService: TelemetryInfluxService,
   ) {}
 
-  async createIot(createIotDto: createIotDto): Promise<responseIotDto> {
+  private readonly logger = new Logger(IotService.name);
+
+  async createIot(createIotDto: CreateIotDto): Promise<ResponseIotDto> {
     const { macAddress } = createIotDto;
 
     const deviceSecret = crypto.randomBytes(24).toString('hex');
@@ -52,16 +55,16 @@ export class IotService {
       },
     });
 
-    return plainToInstance(responseIotDto, {
+    return plainToInstance(ResponseIotDto, {
       ...iot,
       device_secret: deviceSecret,
     });
   }
 
   async linkIotUser(
-    linkIotUserDto: linkIotUserDto,
+    linkIotUserDto: LinkIotUserDto,
     user: UserPayloadDto,
-  ): Promise<responseMessage> {
+  ): Promise<ResponseMessage> {
     const { macAddress } = linkIotUserDto;
     const { id } = user;
 
@@ -97,9 +100,9 @@ export class IotService {
   }
 
   async softResetIot(
-    softResetIotDto: softResetIotDto,
+    softResetIotDto: SoftResetIotDto,
     user: UserPayloadDto,
-  ): Promise<responseMessage> {
+  ): Promise<ResponseMessage> {
     const { macAddress } = softResetIotDto;
     const { id } = user;
     const iot = await this.prismaMysql.iot.findUnique({
@@ -191,6 +194,10 @@ export class IotService {
         data,
       };
     } catch (error) {
+      this.logger.error(
+        `Error querying InfluxDB for device ${iotId}: ${error}`,
+        error instanceof Error ? error.stack : undefined,
+      );
       // Si hay error consultando InfluxDB, devolver datos vacíos
       return {
         columns,

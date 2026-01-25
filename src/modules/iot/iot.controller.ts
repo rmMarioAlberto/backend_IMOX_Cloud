@@ -8,15 +8,15 @@ import {
 } from '@nestjs/common';
 import { IotService } from './iot.service';
 import {
-  createIotDto,
-  linkIotUserDto,
-  responseIotDto,
-  softResetIotDto,
+  CreateIotDto,
+  LinkIotUserDto,
+  ResponseIotDto,
+  SoftResetIotDto,
   GetHistoryDto,
   ResponseHistoryLightweightDto,
 } from './dto/iot.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
-import { responseMessage } from '../../common/utils/dto/utils.dto';
+import { ResponseMessage } from '../../common/utils/dto/utils.dto';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -45,14 +45,14 @@ export class IotController {
   @ApiOperation({ summary: 'Register a new IoT device (Admin)' })
   @ApiCreatedResponse({
     description: 'The IoT device has been successfully registered.',
-    type: responseIotDto,
+    type: ResponseIotDto,
   })
   @ApiBadRequestResponse({ description: 'Invalid input data.' })
   @ApiForbiddenResponse({ description: 'Forbidden.' })
   @ApiConflictResponse({
     description: 'Device with this MAC address already exists.',
   })
-  createIot(@Body() createIotDto: createIotDto): Promise<responseIotDto> {
+  createIot(@Body() createIotDto: CreateIotDto): Promise<ResponseIotDto> {
     return this.iotService.createIot(createIotDto);
   }
 
@@ -61,16 +61,16 @@ export class IotController {
   @ApiOperation({ summary: 'Link an IoT device to a user (private)' })
   @ApiCreatedResponse({
     description: 'The IoT device has been successfully linked.',
-    type: responseMessage,
+    type: ResponseMessage,
   })
   @ApiBadRequestResponse({ description: 'Device not found or invalid data.' })
   @ApiConflictResponse({ description: 'Device already linked to a user.' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   linkUserIot(
-    @Body() linkIotUserDto: linkIotUserDto,
+    @Body() linkIotUserDto: LinkIotUserDto,
     @GetUser() user: UserPayloadDto,
-  ): Promise<responseMessage> {
+  ): Promise<ResponseMessage> {
     return this.iotService.linkIotUser(linkIotUserDto, user);
   }
 
@@ -79,15 +79,15 @@ export class IotController {
   @ApiOperation({ summary: 'Soft reset an IoT device(private)' })
   @ApiCreatedResponse({
     description: 'The IoT device has been successfully soft reset.',
-    type: responseMessage,
+    type: ResponseMessage,
   })
   @ApiBadRequestResponse({ description: 'Device not found or invalid data.' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   softResetIot(
-    @Body() softResetIotDto: softResetIotDto,
+    @Body() softResetIotDto: SoftResetIotDto,
     @GetUser() user: UserPayloadDto,
-  ): Promise<responseMessage> {
+  ): Promise<ResponseMessage> {
     return this.iotService.softResetIot(softResetIotDto, user);
   }
 

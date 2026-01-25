@@ -9,7 +9,7 @@ import { ROLES_KEY } from '../decorators/roles.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<number[]>(
@@ -21,7 +21,7 @@ export class RolesGuard implements CanActivate {
     }
     const { user } = context.switchToHttp().getRequest();
 
-    if (!user || !requiredRoles.some((role) => user.role === role)) {
+    if (!user || !requiredRoles.includes(user.role)) {
       console.log(user.role);
       throw new ForbiddenException(
         'No tienes los permisos necesarios para realizar esta acción',

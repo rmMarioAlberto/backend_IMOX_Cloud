@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 @Exclude()
-export class responseMessage {
+export class ResponseMessage {
   @ApiProperty({ example: 'user updated', description: 'message' })
   @Expose()
   @IsString()

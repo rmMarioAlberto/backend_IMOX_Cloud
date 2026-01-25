@@ -2,7 +2,7 @@ import { Exclude, Expose } from 'class-transformer';
 import { IsNotEmpty, IsString, IsMACAddress, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class createIotDto {
+export class CreateIotDto {
   @ApiProperty({ example: '00:1A:7D:DA:71:13', description: 'MAC Address' })
   @IsString()
   @IsNotEmpty()
@@ -11,7 +11,7 @@ export class createIotDto {
 }
 
 @Exclude()
-export class responseIotDto {
+export class ResponseIotDto {
   @ApiProperty({
     example: 1,
     description: 'ID',
@@ -45,7 +45,7 @@ export class responseIotDto {
   updatedAt: Date;
 }
 
-export class linkIotUserDto {
+export class LinkIotUserDto {
   @ApiProperty({ example: '00:1A:7D:DA:71:13', description: 'MAC Address' })
   @IsString()
   @IsNotEmpty()
@@ -53,7 +53,7 @@ export class linkIotUserDto {
   macAddress: string;
 }
 
-export class softResetIotDto {
+export class SoftResetIotDto {
   @ApiProperty({ example: '00:1A:7D:DA:71:13', description: 'MAC Address' })
   @IsString()
   @IsNotEmpty()

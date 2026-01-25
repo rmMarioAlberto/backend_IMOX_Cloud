@@ -111,10 +111,10 @@ export class TelemetryInfluxService {
   /**
    * Consultar última lectura de telemetría desde InfluxDB
    */
-  async queryLatestTelemetry(iotId: number): Promise<any | null> {
+  async queryLatestTelemetry(iotId: number): Promise<any> {
     try {
       const results = await this.queryTelemetryRange(iotId, '-1h');
-      return results.length > 0 ? results[results.length - 1] : null;
+      return results.at(-1) ?? null;
     } catch (error) {
       this.logger.error(
         `Error consultando última telemetría para iotId ${iotId}`,
