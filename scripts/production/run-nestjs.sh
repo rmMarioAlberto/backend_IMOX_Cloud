@@ -21,20 +21,23 @@ if [ ! -f "$PROJECT_ROOT/docker/.env.production" ]; then
     exit 1
 fi
 
-# Cargar variables de entorno
-export $(grep -v '^#' "$PROJECT_ROOT/docker/.env.production" | xargs)
-
 # Configurar conexiones para localhost (servicios en Docker)
 export MYSQL_HOST=127.0.0.1
 export REDIS_HOST=127.0.0.1
 export INFLUXDB_URL=http://127.0.0.1:8086
 export MQTT_BROKER_URL=mqtt://127.0.0.1:1883
 
+# Construir MYSQL_URL dinámica para Prisma
+# Esto evita errores si la URL en .env tiene password incorrecta
+export MYSQL_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE}"
+
 export NODE_ENV=production
 export PORT=3000
 
 echo "✅ Variables de entorno cargadas"
 echo "📡 Conectando a servicios en localhost"
+echo "   - MySQL User: ${MYSQL_USER}"
+echo "   - MySQL DB:   ${MYSQL_DATABASE}"
 echo ""
 
 # Ejecutar NestJS
