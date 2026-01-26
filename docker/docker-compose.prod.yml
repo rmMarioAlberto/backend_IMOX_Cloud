@@ -129,7 +129,7 @@ services:
 
   # ==================== MQTT BROKER ====================
   mosquitto:
-    image: iegomez/mosquitto-go-auth:2.0.0
+    image: iegomez/mosquitto-go-auth:3.0.0
     container_name: imox_mosquitto
     restart: unless-stopped
     depends_on:
