@@ -17,7 +17,18 @@ fi
 
 # Verificar que existen las variables de entorno
 if [ ! -f "$PROJECT_ROOT/docker/.env.production" ]; then
-    echo "❌ Error: No se encontró docker/.env.production"
+    exit 1
+fi
+
+# Cargar variables de entorno de forma segura
+echo "📂 Cargando variables desde: $PROJECT_ROOT/docker/.env.production"
+set -a
+. "$PROJECT_ROOT/docker/.env.production"
+set +a
+
+# Verificar si se cargaron las credenciales críticas
+if [ -z "$MYSQL_USER" ]; then
+    echo "❌ Error: MYSQL_USER está vacío. Revisa que el archivo .env.production tenga el formato correcto."
     exit 1
 fi
 
