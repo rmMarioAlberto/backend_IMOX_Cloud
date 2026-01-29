@@ -1,9 +1,10 @@
 const mqtt = require('mqtt');
 
 // Configuración
-const BROKER_URL = 'mqtt://localhost:1883';
-const DEVICE_ID = 2; // Asegúrate de que este ID exista en tu DB MariaDB (tabla iot)
-const DEVICE_SECRET = '8d5a1fcd21ee2c930869cb5c2af6ed70cf1a742de6640891'; // Reemplaza con el secret real del dispositivo
+// const BROKER_URL = 'mqtt://localhost:1883'; // Desarrollo local
+const BROKER_URL = 'wss://dietpi.tail02564c.ts.net:443/mqtt'; // Producción via Tailscale Funnel
+const DEVICE_ID = 1; // Asegúrate de que este ID exista en tu DB MariaDB (tabla iot)
+const DEVICE_SECRET = '757ce19c4d5c86809fd454242c359a63ce04a2614752fc5b'; // Reemplaza con el secret real del dispositivo
 const TOPIC = `imox/devices/${DEVICE_ID}/telemetry`;
 const INTERVAL_MS = 1500;
 
@@ -12,6 +13,7 @@ const client = mqtt.connect(BROKER_URL, {
   clientId: `sim_device_${DEVICE_ID}`,
   username: String(DEVICE_ID), // El broker espera el ID como usuario
   password: DEVICE_SECRET,     // El secret como contraseña
+  rejectUnauthorized: true,    // Valida el certificado SSL de Tailscale
 });
 
 client.on('connect', () => {
