@@ -29,20 +29,6 @@ export class ResponseIotDto {
   @ApiProperty({ example: '00:1A:7D:DA:71:13', description: 'MAC Address' })
   @Expose({ name: 'mac_address' })
   macAddress: string;
-
-  @ApiProperty({
-    example: '2025-12-30T10:38:09.000Z',
-    description: 'Created At',
-  })
-  @Expose({ name: 'created_at' })
-  createdAt: Date;
-
-  @ApiProperty({
-    example: '2025-12-30T10:38:09.000Z',
-    description: 'Updated At',
-  })
-  @Expose({ name: 'updated_at' })
-  updatedAt: Date;
 }
 
 export class LinkIotUserDto {

@@ -7,18 +7,16 @@ import {
 import {
   CreateIotDto,
   LinkIotUserDto,
-  ResponseIotDto,
   SoftResetIotDto,
   ResponseHistoryLightweightDto,
   GetHistoryDto,
   IotDeviceDto,
   ResponseIotListDto,
+  ResponseIotDto,
 } from './dto/iot.dto';
 import { MariaDbService } from '../database/mariadb.service';
-import { ResponseMessage } from '../../common/utils/dto/utils.dto';
 import { plainToInstance } from 'class-transformer';
 import crypto from 'node:crypto';
-import { InfluxDbService } from '../database/influxdb.service';
 import { TelemetryInfluxService } from '../database/telemetry/telemetry-influx.service';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
 import * as bcrypt from 'bcrypt';
@@ -27,12 +25,16 @@ import * as bcrypt from 'bcrypt';
 export class IotService {
   constructor(
     private readonly prismaMysql: MariaDbService,
-    private readonly influxDbService: InfluxDbService,
     private readonly telemetryInfluxService: TelemetryInfluxService,
   ) {}
 
   private readonly logger = new Logger(IotService.name);
 
+  /**
+   * Crear un nuevo dispositivo IoT
+   * @param createIotDto
+   * @returns Promise<ResponseIotDto>
+   */
   async createIot(createIotDto: CreateIotDto): Promise<ResponseIotDto> {
     const { macAddress } = createIotDto;
 
@@ -46,7 +48,7 @@ export class IotService {
     });
 
     if (checkIot) {
-      throw new BadRequestException('Device already exists');
+      throw new BadRequestException('El dispositivo ya existe');
     }
 
     const iot = await this.prismaMysql.iot.create({
@@ -63,10 +65,16 @@ export class IotService {
     });
   }
 
+  /**
+   * Vincular un dispositivo IoT a un usuario
+   * @param linkIotUserDto
+   * @param user
+   * @returns Promise<void>
+   */
   async linkIotUser(
     linkIotUserDto: LinkIotUserDto,
     user: UserPayloadDto,
-  ): Promise<ResponseMessage> {
+  ): Promise<void> {
     const { macAddress } = linkIotUserDto;
     const { id } = user;
 
@@ -77,7 +85,7 @@ export class IotService {
     });
 
     if (!checkIot || checkIot.status == 0) {
-      throw new BadRequestException('Device not found');
+      throw new BadRequestException('Dispositivo no encontrado');
     }
 
     if (checkIot.user_id) {
@@ -95,16 +103,18 @@ export class IotService {
         user_id: id,
       },
     });
-
-    return {
-      message: 'IOT linked successfully',
-    };
   }
 
+  /**
+   * Soft reset de un dispositivo IoT
+   * @param softResetIotDto
+   * @param user
+   * @returns Promise<void>
+   */
   async softResetIot(
     softResetIotDto: SoftResetIotDto,
     user: UserPayloadDto,
-  ): Promise<ResponseMessage> {
+  ): Promise<void> {
     const { macAddress } = softResetIotDto;
     const { id } = user;
     const iot = await this.prismaMysql.iot.findUnique({
@@ -112,12 +122,12 @@ export class IotService {
     });
 
     if (!iot || iot.status == 0) {
-      throw new BadRequestException('Divice not fount');
+      throw new BadRequestException('Dispositivo no encontrado');
     }
 
     if (!iot.user_id) {
       throw new BadRequestException(
-        'The device does not have an assigned user.',
+        'El dispositivo no tiene un usuario asignado.',
       );
     }
 
@@ -128,10 +138,6 @@ export class IotService {
       where: { id: iot.id },
       data: { user_id: id },
     });
-
-    return {
-      message: 'IOT soft reset successfully',
-    };
   }
 
   async getIotsByUser(user: UserPayloadDto): Promise<ResponseIotListDto> {

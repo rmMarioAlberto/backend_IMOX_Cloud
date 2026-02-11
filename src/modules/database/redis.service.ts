@@ -19,7 +19,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
 
   constructor(private readonly configService: ConfigService) {}
-
+  /**
+   * @description Método que se ejecuta cuando el módulo se inicializa
+   */
   async onModuleInit() {
     const redisUrl = this.configService.get<string>('REDIS_URL');
 
@@ -56,7 +58,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     await this.client.connect();
   }
-
+  /**
+   * @description Método que se ejecuta cuando el módulo se destruye
+   */
   async onModuleDestroy() {
     await this.client.quit();
     this.logger.log('Redis desconectado');

@@ -4,10 +4,12 @@ import {
   Body,
   HttpCode,
   HttpStatus,
-  UseGuards,
   Req,
+  Res,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { ConfigService } from '@nestjs/config';
 import {
   ApiTags,
   ApiOperation,
@@ -17,20 +19,24 @@ import {
 import {
   LoginUserDto,
   LoginResponseDto,
-  LogoutUserDto,
-  RefreshTokenDto,
-  RefreshTokenResponseDto,
   RequestResetPasswordDto,
   ResetPasswordDto,
   ResetPasswordResponseDto,
+  LoginResponseControllerDto,
+  RefreshTokenResponseControllerDto,
 } from './dto/auth.dto';
-import { ResponseMessage } from '../../common/utils/dto/utils.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import type { Request, Response } from 'express';
+import { plainToInstance } from 'class-transformer';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
+@Public()
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -52,11 +58,20 @@ export class AuthController {
     status: 429,
     description: 'Demasiados intentos de login (Rate Limit: 5 req/min)',
   })
-  login(@Body() loginUserDto: LoginUserDto) {
-    return this.authService.login(loginUserDto);
+  async login(
+    @Body() loginUserDto: LoginUserDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LoginResponseControllerDto> {
+    const response = await this.authService.login(loginUserDto);
+    res.cookie('refreshToken', response.refreshToken, {
+      httpOnly: true,
+      secure: this.configService.get<string>('NODE_ENV') === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+    });
+    return plainToInstance(LoginResponseControllerDto, response);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -66,19 +81,18 @@ export class AuthController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Sesión cerrada exitosamente',
-    type: ResponseMessage,
   })
   @ApiBearerAuth()
-  logout(
-    @Req() req: any,
-    @Body() logoutUserDto: LogoutUserDto,
-  ): Promise<ResponseMessage> {
-    const accessToken = req.headers.authorization;
-    return this.authService.logout(
-      req.user.id,
-      logoutUserDto.deviceId,
-      accessToken,
-    );
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ message: string }> {
+    const refreshToken = (req as any).cookies?.['refreshToken'];
+    if (refreshToken) {
+      await this.authService.logout(refreshToken);
+    }
+    res.clearCookie('refreshToken');
+    return { message: 'Sesión cerrada exitosamente' };
   }
 
   @Post('refresh-token')
@@ -86,22 +100,37 @@ export class AuthController {
   @ApiOperation({
     summary: 'Refrescar Access Token (private)',
     description:
-      'Genera un nuevo par de tokens usando un Refresh Token válido.',
+      'Genera un nuevo par de tokens usando un Refresh Token válido desde cookies.',
   })
   @ApiResponse({
     status: 200,
     description: 'Tokens renovados exitosamente (Rotación)',
-    type: RefreshTokenResponseDto,
+    type: RefreshTokenResponseControllerDto,
   })
   @ApiResponse({
     status: 401,
     description: 'Refresh token inválido, expirado o reusado',
   })
   @ApiBearerAuth()
-  refreshToken(
-    @Body() refreshTokenDto: RefreshTokenDto,
-  ): Promise<RefreshTokenResponseDto> {
-    return this.authService.refreshToken(refreshTokenDto);
+  async refreshToken(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<RefreshTokenResponseControllerDto> {
+    const refreshToken = (req as any).cookies?.['refreshToken'];
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token no encontrado');
+    }
+
+    const response = await this.authService.refreshToken(refreshToken);
+
+    res.cookie('refreshToken', response.refreshToken, {
+      httpOnly: true,
+      secure: this.configService.get<string>('NODE_ENV') === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+    });
+
+    return plainToInstance(RefreshTokenResponseControllerDto, response);
   }
 
   @Post('request-reset-password')

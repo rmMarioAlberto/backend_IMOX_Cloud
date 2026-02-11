@@ -11,6 +11,9 @@ import { ROLES_KEY } from '../decorators/roles.decorator';
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
+  /**
+   * @description Método que se encarga de verificar si el usuario tiene los permisos necesarios para realizar la acción
+   */
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<number[]>(
       ROLES_KEY,
@@ -22,7 +25,6 @@ export class RolesGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest();
 
     if (!user || !requiredRoles.includes(user.role)) {
-      console.log(user.role);
       throw new ForbiddenException(
         'No tienes los permisos necesarios para realizar esta acción',
       );

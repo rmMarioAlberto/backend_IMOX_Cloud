@@ -9,41 +9,42 @@ import { RedisService } from '../redis.service';
 export class AuthRedisService {
   constructor(private readonly redisService: RedisService) {}
 
-  // ==================== Refresh Token Operations ====================
+  // ==================== Session & Refresh Token Operations ====================
 
   /**
-   * Guardar Refresh Token
+   * Guardar sesión completa (Refresh Token + Session ID)
    */
-  async saveRefreshToken(
+  async saveSession(
     userId: number,
     deviceId: string,
-    token: string,
+    data: { refreshToken: string; sessionId: string },
   ): Promise<void> {
     const client = this.redisService.getClient();
-    const key = `imox:auth:refresh:${userId}:${deviceId}`;
-    await client.set(key, token, {
+    const key = `imox:auth:session:${userId}:${deviceId}`;
+    await client.set(key, JSON.stringify(data), {
       EX: 7 * 24 * 60 * 60, // 7 días
     });
   }
 
   /**
-   * Obtener Refresh Token
+   * Obtener sesión completa
    */
-  async getRefreshToken(
+  async getSession(
     userId: number,
     deviceId: string,
-  ): Promise<string | null> {
+  ): Promise<{ refreshToken: string; sessionId: string } | null> {
     const client = this.redisService.getClient();
-    const key = `imox:auth:refresh:${userId}:${deviceId}`;
-    return await client.get(key);
+    const key = `imox:auth:session:${userId}:${deviceId}`;
+    const result = await client.get(key);
+    return result ? JSON.parse(result) : null;
   }
 
   /**
-   * Eliminar Refresh Token (logout)
+   * Eliminar sesión (logout)
    */
-  async deleteRefreshToken(userId: number, deviceId: string): Promise<void> {
+  async deleteSession(userId: number, deviceId: string): Promise<void> {
     const client = this.redisService.getClient();
-    const key = `imox:auth:refresh:${userId}:${deviceId}`;
+    const key = `imox:auth:session:${userId}:${deviceId}`;
     await client.del(key);
   }
 

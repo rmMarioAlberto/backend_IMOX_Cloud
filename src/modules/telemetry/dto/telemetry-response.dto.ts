@@ -1,3 +1,6 @@
+/**
+ * @description Interfaz que representa una respuesta de telemetría
+ */
 export interface TelemetryResponseDto {
   electricas: {
     voltaje_v: number | null;

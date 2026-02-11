@@ -44,6 +44,9 @@ export class TelemetryGateway
     private readonly configService: ConfigService,
   ) {}
 
+  /**
+   * @description Método que se ejecuta cuando un cliente se conecta
+   */
   async handleConnection(client: Socket) {
     try {
       const token =
@@ -56,7 +59,7 @@ export class TelemetryGateway
         return;
       }
 
-      const payload = await this.jwtService.verifyToken(token);
+      const payload = await this.jwtService.verifyAccessToken(token);
 
       // Check Blacklist
       const isBlacklisted =
@@ -76,10 +79,16 @@ export class TelemetryGateway
     }
   }
 
+  /**
+   * @description Método que se ejecuta cuando un cliente se desconecta
+   */
   handleDisconnect(client: Socket) {
     this.logger.log(`Cliente desconectado: ${client.id}`);
   }
 
+  /**
+   * @description Método que se encarga de suscribirse a los tópicos de MQTT
+   */
   @SubscribeMessage('subscribeToDevice')
   async handleSubscribeToDevice(
     @ConnectedSocket() client: Socket,
@@ -97,6 +106,9 @@ export class TelemetryGateway
     }
   }
 
+  /**
+   * @description Método que se encarga de suscribirse a los tópicos de MQTT
+   */
   private async subscribeLogic(client: Socket, data: { iotId: number }) {
     const iotId = data.iotId;
     if (!iotId) {
@@ -193,6 +205,9 @@ export class TelemetryGateway
     return { event: 'subscribed', data: { room: roomName } };
   }
 
+  /**
+   * @description Método que se encarga de desuscribirse de los tópicos de MQTT
+   */
   @SubscribeMessage('unsubscribeFromDevice')
   handleUnsubscribeFromDevice(
     @ConnectedSocket() client: Socket,
@@ -208,6 +223,9 @@ export class TelemetryGateway
     return { event: 'unsubscribed', data: { room: roomName } };
   }
 
+  /**
+   * @description Método que se encarga de transmitir los datos de telemetría a los clientes suscritos
+   */
   broadcastTelemetry(iotId: number, data: TelemetryResponseDto) {
     this.server.to(`device:${iotId}`).emit('telemetry', data);
   }

@@ -18,7 +18,7 @@ export class TelemetryScheduler {
   ) {}
 
   /**
-   * Persistir lecturas en InfluxDB cada 5 minutos
+   * @description Método que se encarga de persistir las lecturas en InfluxDB cada 5 minutos
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async persistAllDevices() {
@@ -40,6 +40,9 @@ export class TelemetryScheduler {
     }
   }
 
+  /**
+   * @description Método que se encarga de procesar los datos de telemetría de un dispositivo
+   */
   private async processDevice(iotId: number) {
     const lastReading = await this.redisService.getTelemetryLast(iotId);
     const criticalEvents = await this.redisService.getCriticalEvents(iotId);
@@ -70,6 +73,9 @@ export class TelemetryScheduler {
     await this.redisService.clearCriticalEvents(iotId);
   }
 
+  /**
+   * @description Método que se encarga de transformar los datos de telemetría
+   */
   private transformToReadings(
     criticalEvents: any[],
     lastReading: any,
@@ -122,6 +128,9 @@ export class TelemetryScheduler {
     return readings;
   }
 
+  /**
+   * @description Método que se encarga de guardar las lecturas en InfluxDB
+   */
   private async saveReadingsToInflux(
     iotId: number,
     readings: TelemetryReadingDto[],
@@ -140,7 +149,7 @@ export class TelemetryScheduler {
   }
 
   /**
-   * Verificar salud de dispositivos cada 5 minutos
+   * @description Método que se encarga de verificar la salud de los dispositivos cada 5 minutos
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async checkDeviceHealth() {
@@ -184,6 +193,9 @@ export class TelemetryScheduler {
     }
   }
 
+  /**
+   * @description Método que se encarga de extraer el id del IoT del tópico
+   */
   private extractIotId(key: string): number {
     // Key format: iot:{id}:last
     const parts = key.split(':');

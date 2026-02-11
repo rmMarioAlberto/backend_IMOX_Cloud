@@ -6,6 +6,9 @@ import {
 } from 'class-validator';
 import { Type, Expose } from 'class-transformer';
 
+/**
+ * @description Clase que representa los datos eléctricos del IoT
+ */
 export class ElectricalDataDto {
   @Expose()
   @IsNumber()
@@ -38,6 +41,9 @@ export class ElectricalDataDto {
   factor_potencia: number | null = null;
 }
 
+/**
+ * @description Clase que representa los datos de diagnóstico del IoT
+ */
 export class DiagnosticDataDto {
   @Expose()
   @IsString()
@@ -60,6 +66,9 @@ export class DiagnosticDataDto {
   uptime_s: number | null = null;
 }
 
+/**
+ * @description Clase que representa los datos de telemetría del IoT
+ */
 export class MqttTelemetryDto {
   @Expose()
   @ValidateNested()

@@ -3,26 +3,28 @@ import {
   UnauthorizedException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthRedisService } from '../database/auth/auth-redis.service';
 import {
   LoginUserDto,
   LoginResponseDto,
-  RefreshTokenDto,
   RefreshTokenResponseDto,
   RequestResetPasswordDto,
   ResetPasswordDto,
   ResetPasswordResponseDto,
 } from './dto/auth.dto';
-import { ResponseMessage } from '../../common/utils/dto/utils.dto';
 import { MariaDbService } from '../database/mariadb.service';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'node:crypto';
 import { JwtService } from './jwt.service';
 import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly redisService: AuthRedisService,
     private readonly mariaDbService: MariaDbService,
@@ -31,6 +33,11 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
+  /**
+   * Autentica un usuario con email y contraseña. Retorna Access Token (15m) y Refresh Token (7d). Soporta sesiones múltiples si se envía deviceId.
+   * @param loginUserDto - DTO con email y contraseña del usuario
+   * @returns DTO con Access Token y Refresh Token
+   */
   async login(loginUserDto: LoginUserDto): Promise<LoginResponseDto> {
     const { email, password } = loginUserDto;
 
@@ -50,17 +57,21 @@ export class AuthService {
 
     const deviceId = loginUserDto.deviceId || 'mobile_app_default';
 
+    const sessionId = crypto.randomUUID();
     const payload = {
       sub: user.id,
-      email: user.email,
       role: user.role,
       deviceId,
+      sessionId,
     };
 
     const accessToken = await this.jwtService.generateAccessToken(payload);
     const refreshToken = await this.jwtService.generateRefreshToken(payload);
 
-    await this.redisService.saveRefreshToken(user.id, deviceId, refreshToken);
+    await this.redisService.saveSession(user.id, deviceId, {
+      refreshToken,
+      sessionId,
+    });
 
     return {
       accessToken,
@@ -74,45 +85,59 @@ export class AuthService {
     };
   }
 
-  async logout(
-    userId: number,
-    deviceId: string | undefined,
-    accessToken?: string,
-  ): Promise<ResponseMessage> {
-    const targetDevice = deviceId || 'mobile_app_default';
-    await this.redisService.deleteRefreshToken(userId, targetDevice);
-
-    if (accessToken) {
-      const token = accessToken.replace('Bearer ', '');
-      const decoded = this.jwtService.decode(token);
-      if (decoded?.exp) {
-        const ttl = decoded.exp - Math.floor(Date.now() / 1000);
-        if (ttl > 0) {
-          await this.redisService.blacklistToken(token, ttl + 120);
-        }
-      }
+  /**
+   * Cierra la sesión de un usuario, invalidando el Refresh Token.
+   * @param refreshToken - Refresh Token a invalidar
+   */
+  async logout(refreshToken: string): Promise<void> {
+    const isBlacklisted =
+      await this.redisService.isTokenBlacklisted(refreshToken);
+    if (isBlacklisted) {
+      return;
     }
 
-    return { message: 'Sesión cerrada exitosamente' };
+    try {
+      const payload = await this.jwtService.verifyRefreshToken(refreshToken);
+      const userId = payload.sub;
+      const deviceId = payload.deviceId || 'mobile_app_default';
+
+      // Calcular tiempo restante para blacklist
+      const currentTimestamp = Math.floor(Date.now() / 1000);
+      const expiresIn = payload.exp - currentTimestamp;
+
+      if (expiresIn > 0) {
+        await this.redisService.blacklistToken(refreshToken, expiresIn + 120);
+      }
+
+      await this.redisService.deleteSession(userId, deviceId);
+    } catch (error) {
+      this.logger.debug(
+        `Logout con token inválido o expirado: ${error.message}`,
+      );
+    }
   }
 
-  async refreshToken(
-    refreshTokenDto: RefreshTokenDto,
-  ): Promise<RefreshTokenResponseDto> {
-    const { refreshToken } = refreshTokenDto;
+  /**
+   * Genera un nuevo par de tokens usando un Refresh Token válido.
+   * @param refreshTokenDto - DTO con Refresh Token
+   * @returns DTO con Access Token y Refresh Token
+   */
+  async refreshToken(refreshToken: string): Promise<RefreshTokenResponseDto> {
+    const isBlacklisted =
+      await this.redisService.isTokenBlacklisted(refreshToken);
+    if (isBlacklisted) {
+      throw new UnauthorizedException('Token invalidado');
+    }
 
-    const payload = await this.jwtService.verifyToken(refreshToken);
+    const payload = await this.jwtService.verifyRefreshToken(refreshToken);
     const userId = payload.sub;
     const deviceId = payload.deviceId || 'mobile_app_default';
 
-    const storedToken = await this.redisService.getRefreshToken(
-      userId,
-      deviceId,
-    );
+    const session = await this.redisService.getSession(userId, deviceId);
 
-    if (!storedToken || storedToken !== refreshToken) {
-      if (storedToken) {
-        await this.redisService.deleteRefreshToken(userId, deviceId);
+    if (session?.refreshToken !== refreshToken) {
+      if (session) {
+        await this.redisService.deleteSession(userId, deviceId);
       }
       throw new UnauthorizedException('Token inválido o reusado');
     }
@@ -125,18 +150,29 @@ export class AuthService {
       throw new UnauthorizedException('Usuario inactivo o no encontrado');
     }
 
+    // Blacklist el token viejo antes de rotar
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const expiresIn = payload.exp - currentTimestamp;
+    if (expiresIn > 0) {
+      await this.redisService.blacklistToken(refreshToken, expiresIn + 120);
+    }
+
+    const newSessionId = crypto.randomUUID();
     const newPayload = {
       sub: user.id,
-      email: user.email,
       role: user.role,
       deviceId,
+      sessionId: newSessionId,
     };
     const newAccessToken =
       await this.jwtService.generateAccessToken(newPayload);
     const newRefreshToken =
       await this.jwtService.generateRefreshToken(newPayload);
 
-    await this.redisService.saveRefreshToken(userId, deviceId, newRefreshToken);
+    await this.redisService.saveSession(userId, deviceId, {
+      refreshToken: newRefreshToken,
+      sessionId: newSessionId,
+    });
 
     return {
       accessToken: newAccessToken,
@@ -144,6 +180,11 @@ export class AuthService {
     };
   }
 
+  /**
+   * Restablece la contraseña de un usuario usando el token/código recibido.
+   * @param resetPasswordDto - DTO con token y nueva contraseña
+   * @returns DTO con mensaje de éxito
+   */
   async resetPassword(
     resetPasswordDto: ResetPasswordDto,
   ): Promise<ResetPasswordResponseDto> {
@@ -171,6 +212,11 @@ export class AuthService {
     return { message: 'Contraseña actualizada exitosamente' };
   }
 
+  /**
+   * Solicita el restablecimiento de la contraseña de un usuario.
+   * @param requestResetPasswordDto - DTO con email del usuario
+   * @returns DTO con mensaje de éxito
+   */
   async requestPasswordReset(requestResetPasswordDto: RequestResetPasswordDto) {
     const { email } = requestResetPasswordDto;
 

@@ -27,6 +27,9 @@ export class SpikeDetectorService {
     );
   }
 
+  /**
+   * @description Método que se encarga de detectar anomalías en los datos de telemetría
+   */
   detectAnomaly(
     current: MqttTelemetryDto,
     baseline: MqttTelemetryDto | null,

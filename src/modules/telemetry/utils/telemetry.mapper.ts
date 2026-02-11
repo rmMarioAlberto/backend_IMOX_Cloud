@@ -1,6 +1,9 @@
 import { MqttTelemetryDto } from '../../mqtt/dto/mqtt.dto';
 import { TelemetryResponseDto } from '../dto/telemetry-response.dto';
 
+/**
+ * @description Método que se encarga de transformar los datos de telemetría
+ */
 export function toTelemetryResponse(
   data: MqttTelemetryDto,
   isCritical: boolean = false,

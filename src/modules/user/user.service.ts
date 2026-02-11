@@ -13,15 +13,17 @@ import { UserPayloadDto } from '../auth/dto/auth.dto';
 import { MariaDbService } from '../database/mariadb.service';
 import { plainToInstance } from 'class-transformer';
 import { hash } from 'bcrypt';
-import { ResponseMessage } from 'src/common/utils/dto/utils.dto';
 
 @Injectable()
 export class UserService {
   constructor(private readonly mariaDbService: MariaDbService) {}
 
-  async register(
-    registerUserDto: RegisterUserDto,
-  ): Promise<RegisterResponseDto> {
+  /**
+   * Registrar un nuevo usuario
+   * @param registerUserDto
+   * @returns Promise<void>
+   */
+  async register(registerUserDto: RegisterUserDto): Promise<void> {
     const { name, email, password } = registerUserDto;
 
     const checkUser = await this.mariaDbService.users.findUnique({
@@ -34,7 +36,7 @@ export class UserService {
       throw new ConflictException('El correo ya está registrado');
     }
 
-    const newUser = await this.mariaDbService.users.create({
+    await this.mariaDbService.users.create({
       data: {
         name,
         email,
@@ -43,10 +45,13 @@ export class UserService {
         status: 1,
       },
     });
-
-    return plainToInstance(RegisterResponseDto, newUser);
   }
 
+  /**
+   * Obtener perfil del usuario
+   * @param user
+   * @returns Promise<ResponseGetProfileDto>
+   */
   async getProfile(user: UserPayloadDto): Promise<ResponseGetProfileDto> {
     const { id } = user;
 
@@ -59,17 +64,18 @@ export class UserService {
     return plainToInstance(ResponseGetProfileDto, userFound);
   }
 
-  async editProfile(
-    dto: EditProfileDto,
-    userId: number,
-  ): Promise<ResponseMessage> {
+  /**
+   * Editar perfil del usuario
+   * @param dto
+   * @param userId
+   * @returns Promise<void>
+   */
+  async editProfile(dto: EditProfileDto, userId: number): Promise<void> {
     const { name } = dto;
 
     await this.mariaDbService.users.update({
       where: { id: userId },
       data: { name },
     });
-
-    return { message: 'user updated' };
   }
 }

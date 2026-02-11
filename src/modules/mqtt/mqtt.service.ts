@@ -30,6 +30,9 @@ export class MqttService implements OnModuleInit {
     await this.connectToBroker();
   }
 
+  /**
+   * @description Método que se ejecuta cuando el módulo se inicializa
+   */
   private async connectToBroker() {
     const brokerUrl =
       this.configService.get<string>('MQTT_BROKER_URL') ||
@@ -68,6 +71,9 @@ export class MqttService implements OnModuleInit {
     });
   }
 
+  /**
+   * @description Método que se encarga de suscribirse a los tópicos de MQTT
+   */
   private subscribeToTopics() {
     const topic = 'imox/devices/+/telemetry';
     this.client.subscribe(topic, (err) => {
@@ -79,6 +85,9 @@ export class MqttService implements OnModuleInit {
     });
   }
 
+  /**
+   * @description Método que se encarga de manejar los mensajes recibidos de MQTT
+   */
   private async handleMessage(topic: string, payload: Buffer) {
     try {
       const rawData = JSON.parse(payload.toString());
@@ -158,11 +167,17 @@ export class MqttService implements OnModuleInit {
     }
   }
 
+  /**
+   * @description Método que se encarga de extraer el id del IoT del tópico
+   */
   private extractIotIdFromTopic(topic: string): number {
     const parts = topic.split('/');
     return Number.parseInt(parts[2], 10);
   }
 
+  /**
+   * @description Método que se ejecuta cuando el módulo se destruye
+   */
   async onModuleDestroy() {
     if (this.client) {
       this.client.end();

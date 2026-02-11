@@ -31,6 +31,9 @@ export class InfluxDbService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * @description Método que se ejecuta cuando el módulo se inicializa
+   */
   async onModuleInit() {
     this.influxDB = new InfluxDB({ url: this.url, token: this.token });
     this.writeApi = this.influxDB.getWriteApi(this.org, this.bucket);
@@ -40,6 +43,9 @@ export class InfluxDbService implements OnModuleInit, OnModuleDestroy {
     this.logger.log('Conectado a InfluxDB correctamente');
   }
 
+  /**
+   * @description Método que se ejecuta cuando el módulo se destruye
+   */
   async onModuleDestroy() {
     try {
       await this.writeApi.close();

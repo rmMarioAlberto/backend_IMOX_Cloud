@@ -1,3 +1,6 @@
+/**
+ * @description Interfaz que representa una lectura de telemetría
+ */
 export interface TelemetryReadingDto {
   type: 'normal' | 'critical';
   anomaly_type?: 'SPIKE' | 'LIMIT' | 'NONE';

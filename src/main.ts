@@ -4,29 +4,17 @@ import { initSentry } from './config/sentry.config';
 import { setupSwagger } from './config/swagger.config';
 import { globalValidationPipe } from './common/pipes/validation.pipe';
 import { corsConfig } from './config/cors.config';
-import { AllExceptionsFilter } from './common/filters/exceptions.filter';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import { getHelmetConfig } from './config/helmet.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(cookieParser());
   const configService = app.get(ConfigService);
-  const isProduction = configService.get<string>('NODE_ENV') === 'production';
 
-  app.use(
-    helmet({
-      contentSecurityPolicy: false, // APIs REST no envían HTML
-      frameguard: { action: 'deny' }, // "X-Frame-Options: DENY"
-      referrerPolicy: { policy: 'no-referrer' }, // Oculta la URL de origen en peticiones salientes
-      hsts: isProduction
-        ? {
-            maxAge: 63072000, // Mantenemos 2 años
-            includeSubDomains: true,
-            preload: true,
-          }
-        : false,
-    }),
-  );
+  app.use(helmet(getHelmetConfig(configService)));
 
   // Inicializar Sentry
   initSentry(configService);
@@ -34,14 +22,11 @@ async function bootstrap() {
   // Configurar CORS para Web, Móvil y IoT
   app.enableCors(corsConfig(configService));
 
-  // Aplicar filtro global de excepciones
-  app.useGlobalFilters(new AllExceptionsFilter(configService));
-
   // Aplicar validación global
   app.useGlobalPipes(globalValidationPipe(configService));
 
   // Configurar Swagger
-  setupSwagger(app);
+  setupSwagger(app, configService);
 
   // Iniciar el servidor
   const port = configService.get<number>('NESTJS_PORT') || 3000;

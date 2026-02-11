@@ -16,7 +16,7 @@ export class JwtService {
    */
   async generateAccessToken(payload: any): Promise<string> {
     return this.jwtService.signAsync(payload, {
-      secret: this.configService.get<string>('JWT_SECRET'),
+      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
       expiresIn: (this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') ||
         '15m') as any,
     });
@@ -27,18 +27,27 @@ export class JwtService {
    */
   async generateRefreshToken(payload: any): Promise<string> {
     return this.jwtService.signAsync(payload, {
-      secret: this.configService.get<string>('JWT_SECRET'),
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       expiresIn: (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ||
         '7d') as any,
     });
   }
 
   /**
-   * Verifica la validez de un token y retorna su payload
+   * Verifica la validez de un access token y retorna su payload
    */
-  async verifyToken(token: string): Promise<any> {
+  async verifyAccessToken(token: string): Promise<any> {
     return await this.jwtService.verifyAsync(token, {
-      secret: this.configService.get<string>('JWT_SECRET'),
+      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+    });
+  }
+
+  /**
+   * Verifica la validez de un refresh token y retorna su payload
+   */
+  async verifyRefreshToken(token: string): Promise<any> {
+    return await this.jwtService.verifyAsync(token, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
     });
   }
 

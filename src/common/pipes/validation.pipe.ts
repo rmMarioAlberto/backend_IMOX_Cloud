@@ -1,6 +1,9 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+/**
+ * @description Método que se encarga de crear un ValidationPipe global
+ */
 export const globalValidationPipe = (configService: ConfigService) => {
   const isProduction = configService.get('NODE_ENV') === 'production';
 

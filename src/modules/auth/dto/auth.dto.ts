@@ -9,6 +9,9 @@ import {
 import { ApiProperty } from '@nestjs/swagger';
 import { Exclude, Expose } from 'class-transformer';
 
+/**
+ * DTO para iniciar sesión de un usuario
+ */
 export class LoginUserDto {
   @ApiProperty({
     example: 'usuario@imox.cloud',
@@ -44,6 +47,9 @@ export class LoginUserDto {
 }
 
 @Exclude()
+/**
+ * DTO para la respuesta de iniciar sesión de un usuario
+ */
 export class LoginResponseDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
@@ -80,16 +86,41 @@ export class LoginResponseDto {
     role: number;
   };
 }
-
-export class LogoutUserDto {
+/**
+ * DTO para la respuesta de iniciar sesión de un usuario
+ */
+@Exclude()
+export class LoginResponseControllerDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-    description: 'Token de refresco a invalidar',
+    description: 'Token de acceso JWT (válido por 15 minutos)',
   })
   @IsString()
   @IsNotEmpty()
-  refreshToken: string;
+  @Expose()
+  accessToken: string;
+  @Expose()
+  @ApiProperty({
+    description: 'Datos del usuario autenticado',
+    example: {
+      id: 1,
+      name: 'Juan Perez',
+      email: 'juan@imox.cloud',
+      role: 1,
+    },
+  })
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    role: number;
+  };
+}
 
+/**
+ * DTO para cerrar sesión de un usuario
+ */
+export class LogoutUserDto {
   @ApiProperty({
     example: 'android_uuid_12345',
     description: 'ID del dispositivo a desconectar',
@@ -100,6 +131,9 @@ export class LogoutUserDto {
   deviceId?: string;
 }
 
+/**
+ * DTO para obtener un nuevo access token
+ */
 export class RefreshTokenDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
@@ -111,6 +145,9 @@ export class RefreshTokenDto {
 }
 
 @Exclude()
+/**
+ * DTO para la respuesta de obtener un nuevo access token
+ */
 export class RefreshTokenResponseDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
@@ -131,6 +168,9 @@ export class RefreshTokenResponseDto {
   refreshToken: string;
 }
 
+/**
+ * DTO para solicitar el código de recuperación de contraseña
+ */
 export class RequestResetPasswordDto {
   @ApiProperty({
     example: 'usuario@imox.cloud',
@@ -142,6 +182,9 @@ export class RequestResetPasswordDto {
   email: string;
 }
 
+/**
+ * DTO para restablecer la contraseña de un usuario
+ */
 export class ResetPasswordDto {
   @ApiProperty({
     example: 'newPassword123',
@@ -165,6 +208,9 @@ export class ResetPasswordDto {
 }
 
 @Exclude()
+/**
+ * DTO para la respuesta de restablecer la contraseña de un usuario
+ */
 export class ResetPasswordResponseDto {
   @ApiProperty({
     example: 'Contraseña actualizada exitosamente',
@@ -180,8 +226,26 @@ export class ResetPasswordResponseDto {
   message: string;
 }
 
+/**
+ * DTO para el payload del usuario autenticado
+ */
 export class UserPayloadDto {
   id: number;
   email: string;
   role: number;
+}
+
+@Exclude()
+/**
+ * DTO para la respuesta de obtener un nuevo access token (Controller)
+ */
+export class RefreshTokenResponseControllerDto {
+  @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'Nuevo token de acceso JWT',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @Expose()
+  accessToken: string;
 }

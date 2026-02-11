@@ -18,7 +18,6 @@ import {
   ResponseIotListDto,
 } from './dto/iot.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
-import { ResponseMessage } from '../../common/utils/dto/utils.dto';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -30,13 +29,11 @@ import {
   ApiOkResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 
 @ApiTags('IoT')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('iot')
 export class IotController {
   constructor(private readonly iotService: IotService) {}
@@ -44,17 +41,16 @@ export class IotController {
   @Post('create')
   @Roles(2)
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register a new IoT device (Admin)' })
+  @ApiOperation({ summary: 'Registrar un nuevo dispositivo IoT (Admin)' })
   @ApiCreatedResponse({
-    description: 'The IoT device has been successfully registered.',
-    type: ResponseIotDto,
+    description: 'El IoT ha sido registrado correctamente.',
   })
-  @ApiBadRequestResponse({ description: 'Invalid input data.' })
-  @ApiForbiddenResponse({ description: 'Forbidden.' })
+  @ApiBadRequestResponse({ description: 'Datos de entrada inválidos.' })
+  @ApiForbiddenResponse({ description: 'Prohibido.' })
   @ApiConflictResponse({
-    description: 'Device with this MAC address already exists.',
+    description: 'El dispositivo con esta dirección MAC ya existe.',
   })
-  createIot(@Body() createIotDto: CreateIotDto): Promise<ResponseIotDto> {
+  async createIot(@Body() createIotDto: CreateIotDto): Promise<ResponseIotDto> {
     return this.iotService.createIot(createIotDto);
   }
 
@@ -63,17 +59,17 @@ export class IotController {
   @ApiOperation({ summary: 'Link an IoT device to a user (private)' })
   @ApiCreatedResponse({
     description: 'The IoT device has been successfully linked.',
-    type: ResponseMessage,
   })
   @ApiBadRequestResponse({ description: 'Device not found or invalid data.' })
   @ApiConflictResponse({ description: 'Device already linked to a user.' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  linkUserIot(
+  async linkUserIot(
     @Body() linkIotUserDto: LinkIotUserDto,
     @GetUser() user: UserPayloadDto,
-  ): Promise<ResponseMessage> {
-    return this.iotService.linkIotUser(linkIotUserDto, user);
+  ): Promise<{ message: string }> {
+    await this.iotService.linkIotUser(linkIotUserDto, user);
+    return { message: 'Device linked successfully' };
   }
 
   @Get('list')
@@ -96,16 +92,16 @@ export class IotController {
   @ApiOperation({ summary: 'Soft reset an IoT device(private)' })
   @ApiCreatedResponse({
     description: 'The IoT device has been successfully soft reset.',
-    type: ResponseMessage,
   })
   @ApiBadRequestResponse({ description: 'Device not found or invalid data.' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  softResetIot(
+  async softResetIot(
     @Body() softResetIotDto: SoftResetIotDto,
     @GetUser() user: UserPayloadDto,
-  ): Promise<ResponseMessage> {
-    return this.iotService.softResetIot(softResetIotDto, user);
+  ): Promise<{ message: string }> {
+    await this.iotService.softResetIot(softResetIotDto, user);
+    return { message: 'Device soft reset successfully' };
   }
 
   @Post('history')

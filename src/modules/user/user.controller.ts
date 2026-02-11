@@ -19,7 +19,6 @@ import {
   EditProfileDto,
 } from './dto/user.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
-import { ResponseMessage } from '../../common/utils/dto/utils.dto';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -42,7 +41,6 @@ export class UserController {
   @ApiResponse({
     status: HttpStatus.CREATED,
     description: 'Usuario creado exitosamente.',
-    type: RegisterResponseDto,
   })
   @ApiResponse({
     status: 409,
@@ -52,11 +50,11 @@ export class UserController {
     status: 400,
     description: 'Datos de entrada inválidos (validación fallida).',
   })
-  @UseInterceptors(ClassSerializerInterceptor)
   async register(
     @Body() registerUserDto: RegisterUserDto,
-  ): Promise<RegisterResponseDto> {
-    return this.userService.register(registerUserDto);
+  ): Promise<{ message: string }> {
+    await this.userService.register(registerUserDto);
+    return { message: 'Usuario registrado exitosamente' };
   }
 
   @Get('getProfile')
@@ -93,12 +91,12 @@ export class UserController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Perfil actualizado exitosamente.',
-    type: ResponseMessage,
   })
   async editProfile(
     @Body() dto: EditProfileDto,
     @GetUser() user: UserPayloadDto,
-  ): Promise<ResponseMessage> {
-    return this.userService.editProfile(dto, user.id);
+  ): Promise<{ message: string }> {
+    await this.userService.editProfile(dto, user.id);
+    return { message: 'Perfil actualizado exitosamente' };
   }
 }

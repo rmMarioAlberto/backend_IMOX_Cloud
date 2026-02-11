@@ -9,6 +9,9 @@ import {
 import { Exclude, Expose } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
+/**
+ * DTO para registrar un nuevo usuario
+ */
 export class RegisterUserDto {
   @ApiProperty({
     example: 'Juan Pérez',
@@ -43,7 +46,9 @@ export class RegisterUserDto {
   @MaxLength(50)
   password: string;
 }
-
+/**
+ * DTO para la respuesta del registro de un nuevo usuario
+ */
 @Exclude()
 export class RegisterResponseDto {
   @ApiProperty({ example: 1, description: 'ID único del usuario creado' })
@@ -51,6 +56,9 @@ export class RegisterResponseDto {
   id: number;
 }
 
+/**
+ * DTO para la respuesta de obtener el perfil del usuario
+ */
 @Exclude()
 export class ResponseGetProfileDto {
   @ApiProperty({ example: 1, description: 'ID único del usuario' })
@@ -80,7 +88,9 @@ export class ResponseGetProfileDto {
   @IsNumber()
   role: number;
 }
-
+/**
+ * DTO para la solicitud de editar el perfil del usuario
+ */
 export class EditProfileDto {
   @ApiProperty({ example: 'carlos', description: 'username' })
   @IsNotEmpty()
