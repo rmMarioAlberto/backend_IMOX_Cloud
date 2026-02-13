@@ -1,12 +1,12 @@
 const io = require('socket.io-client');
 
 // --- CONFIGURACIÓN ---
-const URL = 'http://localhost:3000/telemetry'; // Nota: Socket.io client maneja el namespace en la URL
-const IOT_ID = 1;
+const URL = 'https://dietpi.tail02564c.ts.net/telemetry'; // Nota: Socket.io client maneja el namespace en la URL
+const IOT_ID = 3;
 
 // TOKEN JWT (Pégalo aquí o usa uno de prueba si tienes auth desactivada o mockeada)
 // IMPORTANTE: Reemplaza esto con un token válido generado por tu endpoint /auth/login
-const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsImVtYWlsIjoidXNlcjFAZ21haWwuY29tIiwicm9sZSI6MSwiZGV2aWNlSWQiOiJhbmRyb2lkX3V1aWRfMTIzNDUxIiwiaWF0IjoxNzY3MTMyODA1LCJleHAiOjE3NjcxMzM3MDV9.rDJ566IYxbTBa-MWk8XK50nWTfJb8TMrSElgR48HW6Y'; 
+const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjQsImVtYWlsIjoiYWxhbnBlcmV4MTEyQGdtYWlsLmNvbSIsInJvbGUiOjEsImRldmljZUlkIjoiYW5kcm9pZF91dWlkXzEyMzQ1MSIsImlhdCI6MTc3MTAwMTI4OSwiZXhwIjoxNzcxMDAyMTg5fQ.QZyARvpbHmBn9XbvWnmKVLbFPjZfKe11xrhpmykW5X4'; 
 
 // Token check removed
 console.log('Token configurado: ' + TOKEN.substring(0, 10) + '...');
