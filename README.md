@@ -8,7 +8,7 @@ Backend para la plataforma IoT IMOX Cloud, construido con NestJS.
 - **Docker** & **Docker Compose**
 - **Hardware (Prod)**: Probado en Raspberry Pi 3/4 (ARM64)
 
-## 🚀 Configuración Inicial
+## Configuración Inicial
 
 ### 1. Variables de Entorno
 
