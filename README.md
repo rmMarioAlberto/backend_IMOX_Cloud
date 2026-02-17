@@ -135,3 +135,39 @@ Por defecto, InfluxDB guarda datos infinitamente. Para limitar a 60 días (recom
 - `scripts/start-dev.sh`: Inicia entorno completo (Docker).
 - `scripts/start-prod.sh`: Inicia solo infraestructura (Docker).
 - `tools/hash_mqtt_password.js`: Generador de hashes para Mosquitto.
+
+---
+
+## 🤖 Automatización de Despliegues (CI/CD)
+
+Para actualizar automáticamente la Raspberry Pi cada vez que haces `git push` a `main`:
+
+### 1. Configurar GitHub Runner en la RPi
+
+1. Ve a tu repositorio en GitHub: **Settings -> Actions -> Runners -> New self-hosted runner**.
+2. Selecciona **Linux** y **ARM64**.
+3. Ejecuta los comandos en tu RPi (dentro de una carpeta dedicada, ej: `~/actions-runner`).
+4. Configura el runner (deja los defaults con Enter).
+5. Instala el servicio systemd para que el runner no se apague:
+   ```bash
+   sudo ./svc.sh install
+   sudo ./svc.sh start
+   ```
+
+### 2. Flujo Automático
+
+El archivo `.github/workflows/deploy.yml` ya incluye la configuración. Al hacer push, tu RPi ejecutará automáticamente:
+
+1. `git pull`
+2. `npm ci` (instalar dependencias)
+3. `npx prisma generate`
+4. `npm run build`
+5. `pm2 reload imox-backend` (reinicia sin downtime)
+
+### 3. Opción Manual
+
+Si prefieres no usar GitHub Actions, puedes usar el script incluido:
+
+```bash
+./scripts/deploy.sh
+```
