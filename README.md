@@ -80,7 +80,7 @@ Ver logs de un servicio específico (ej. MQTT para depurar conexión):
 docker compose -f docker/docker-compose.yml logs -f mosquitto
 ```
 
-### 🔄 Inicializar Base de Datos (Schema)
+### Inicializar Base de Datos (Schema)
 
 Si la base de datos es nueva o está vacía, debes enviar el esquema de Prisma para crear las tablas:
 
