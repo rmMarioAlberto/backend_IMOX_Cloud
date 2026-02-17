@@ -7,7 +7,6 @@ import {
 import {
   CreateIotDto,
   LinkIotUserDto,
-  SoftResetIotDto,
   ResponseHistoryLightweightDto,
   GetHistoryDto,
   IotDeviceDto,
@@ -88,11 +87,9 @@ export class IotService {
       throw new BadRequestException('Dispositivo no encontrado');
     }
 
+    // Si ya tiene un usuario vinculado, hacer soft reset (borrar telemetría)
     if (checkIot.user_id) {
-      throw new ConflictException({
-        message: 'Este dispositivo ya está vinculado a otra cuenta',
-        errorCode: 'IOT_ALREADY_LINKED',
-      });
+      await this.deleteTelemetryData(checkIot.id);
     }
 
     await this.prismaMysql.iot.update({
@@ -106,40 +103,10 @@ export class IotService {
   }
 
   /**
-   * Soft reset de un dispositivo IoT
-   * @param softResetIotDto
+   * Obtiene la lista de dispositivos IoT vinculados a un usuario
    * @param user
-   * @returns Promise<void>
+   * @returns Promise<ResponseIotListDto>
    */
-  async softResetIot(
-    softResetIotDto: SoftResetIotDto,
-    user: UserPayloadDto,
-  ): Promise<void> {
-    const { macAddress } = softResetIotDto;
-    const { id } = user;
-    const iot = await this.prismaMysql.iot.findUnique({
-      where: { mac_address: macAddress },
-    });
-
-    if (!iot || iot.status == 0) {
-      throw new BadRequestException('Dispositivo no encontrado');
-    }
-
-    if (!iot.user_id) {
-      throw new BadRequestException(
-        'El dispositivo no tiene un usuario asignado.',
-      );
-    }
-
-    // Eliminar datos de telemetría del dispositivo en InfluxDB
-    await this.deleteTelemetryData(iot.id);
-
-    await this.prismaMysql.iot.update({
-      where: { id: iot.id },
-      data: { user_id: id },
-    });
-  }
-
   async getIotsByUser(user: UserPayloadDto): Promise<ResponseIotListDto> {
     const { id } = user;
 
@@ -165,6 +132,12 @@ export class IotService {
     return { devices };
   }
 
+  /**
+   * Obtiene la lista de datos de telemetría de un dispositivo IoT
+   * @param dto
+   * @param user
+   * @returns Promise<ResponseHistoryLightweightDto>
+   */
   async getDeviceHistory(
     dto: GetHistoryDto,
     user: UserPayloadDto,
@@ -239,6 +212,11 @@ export class IotService {
     }
   }
 
+  /**
+   * Elimina los datos de telemetría de un dispositivo IoT
+   * @param iotId
+   * @returns Promise<void>
+   */
   private async deleteTelemetryData(iotId: number): Promise<void> {
     try {
       await this.telemetryInfluxService.deleteTelemetryByIotId(iotId);

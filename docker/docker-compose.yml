@@ -2,7 +2,7 @@
 services:
   # ==================== MQTT BROKER ====================
   mosquitto:
-    image: iegomez/mosquitto-go-auth:latest
+    image: iegomez/mosquitto-go-auth:3.0.0-mosquitto_2.0.18
     container_name: imox_mosquitto
     restart: unless-stopped
     depends_on:
@@ -32,7 +32,7 @@ services:
 
   # ==================== TIME SERIES DB (INFLUXDB) ====================
   influxdb:
-    image: influxdb:2
+    image: influxdb:2.7.10
     container_name: imox_influxdb
     restart: unless-stopped
     ports:
@@ -57,7 +57,7 @@ services:
 
   # ==================== RELATIONAL DB (MARIADB) ====================
   mariadb:
-    image: mariadb:latest
+    image: mariadb:11.2-jammy
     container_name: imox_mariadb
     restart: unless-stopped
     environment:
@@ -79,7 +79,7 @@ services:
 
   # ==================== REDIS (CACHE/SESSION) ====================
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     container_name: imox_redis
     restart: unless-stopped
     ports:
@@ -119,26 +119,27 @@ services:
       PORT: 3000
       
       # Database Connections
-      MYSQL_HOST: mariadb
+      MYSQL_HOST: imox_mariadb
       MYSQL_PORT: 3306
       MYSQL_USER: ${MYSQL_USER:-imox_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-imox_pass}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-imox_auth}
+      # Override MYSQL_URL for internal docker networking
+      MYSQL_URL: mysql://${MYSQL_USER:-imox_user}:${MYSQL_PASSWORD:-imox_pass}@imox_mariadb:3306/${MYSQL_DATABASE:-imox_auth}
       
-      REDIS_HOST: redis
+      REDIS_HOST: imox_redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password_change_in_production}
+      # Override REDIS_URL for internal docker networking
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password_change_in_production}@imox_redis:6379
       
-      MQTT_BROKER_URL: mqtt://mosquitto:1883
+      MQTT_BROKER_URL: mqtt://imox_mosquitto:1883
       
-      # InfluxDB (New)
-      INFLUXDB_URL: http://influxdb:8086
+      # InfluxDB
+      INFLUXDB_URL: http://imox_influxdb:8086
       INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-my-super-secret-auth-token}
       INFLUXDB_ORG: ${INFLUXDB_ORG:-imox_org}
       INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-imox_bucket}
-      
-      # Legacy Variables (to be removed after code migration)
-      MONGO_URI: "mongodb://dummy:27017/db" # Placeholder to avoid immediate crash if checked
       
     volumes:
       - ../src:/app/src
@@ -147,7 +148,7 @@ services:
       - /app/node_modules
     networks:
       - imox_network
-    command: npm run start:dev
+    command: sh -c "npx prisma generate --schema=./src/database/prisma/schemaMaria.prisma && npm run start:dev"
 
 volumes:
   mariadb_data:

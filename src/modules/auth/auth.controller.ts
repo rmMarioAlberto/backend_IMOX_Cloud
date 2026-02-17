@@ -133,21 +133,6 @@ export class AuthController {
     return plainToInstance(RefreshTokenResponseControllerDto, response);
   }
 
-  @Post('request-reset-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Solicitar recuperación de contraseña (public)',
-    description:
-      'Envía un código de recuperación al correo electrónico si existe.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Correo enviado (simulado en consola dev)',
-  })
-  requestResetPassword(@Body() dto: RequestResetPasswordDto) {
-    return this.authService.requestPasswordReset(dto);
-  }
-
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

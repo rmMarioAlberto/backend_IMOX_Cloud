@@ -12,7 +12,6 @@ import {
   CreateIotDto,
   LinkIotUserDto,
   ResponseIotDto,
-  SoftResetIotDto,
   GetHistoryDto,
   ResponseHistoryLightweightDto,
   ResponseIotListDto,
@@ -56,12 +55,15 @@ export class IotController {
 
   @Post('link')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Link an IoT device to a user (private)' })
+  @ApiOperation({
+    summary:
+      'Link an IoT device to a user. If already linked, performs soft reset and re-links (private)',
+  })
   @ApiCreatedResponse({
-    description: 'The IoT device has been successfully linked.',
+    description:
+      'The IoT device has been successfully linked. If it was previously linked, telemetry data was cleared.',
   })
   @ApiBadRequestResponse({ description: 'Device not found or invalid data.' })
-  @ApiConflictResponse({ description: 'Device already linked to a user.' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async linkUserIot(
@@ -85,23 +87,6 @@ export class IotController {
   @ApiBearerAuth()
   getIots(@GetUser() user: UserPayloadDto): Promise<ResponseIotListDto> {
     return this.iotService.getIotsByUser(user);
-  }
-
-  @Post('soft-reset')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Soft reset an IoT device(private)' })
-  @ApiCreatedResponse({
-    description: 'The IoT device has been successfully soft reset.',
-  })
-  @ApiBadRequestResponse({ description: 'Device not found or invalid data.' })
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  async softResetIot(
-    @Body() softResetIotDto: SoftResetIotDto,
-    @GetUser() user: UserPayloadDto,
-  ): Promise<{ message: string }> {
-    await this.iotService.softResetIot(softResetIotDto, user);
-    return { message: 'Device soft reset successfully' };
   }
 
   @Post('history')

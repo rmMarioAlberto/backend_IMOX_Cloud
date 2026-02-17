@@ -3,12 +3,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import {
-  RegisterUserDto,
-  RegisterResponseDto,
-  ResponseGetProfileDto,
-  EditProfileDto,
-} from './dto/user.dto';
+import { RegisterUserDto, ResponseGetProfileDto } from './dto/user.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
 import { MariaDbService } from '../database/mariadb.service';
 import { plainToInstance } from 'class-transformer';
@@ -62,20 +57,5 @@ export class UserService {
       throw new BadRequestException('User not found');
     }
     return plainToInstance(ResponseGetProfileDto, userFound);
-  }
-
-  /**
-   * Editar perfil del usuario
-   * @param dto
-   * @param userId
-   * @returns Promise<void>
-   */
-  async editProfile(dto: EditProfileDto, userId: number): Promise<void> {
-    const { name } = dto;
-
-    await this.mariaDbService.users.update({
-      where: { id: userId },
-      data: { name },
-    });
   }
 }

@@ -39,14 +39,6 @@ export class LinkIotUserDto {
   macAddress: string;
 }
 
-export class SoftResetIotDto {
-  @ApiProperty({ example: '00:1A:7D:DA:71:13', description: 'MAC Address' })
-  @IsString()
-  @IsNotEmpty()
-  @IsMACAddress()
-  macAddress: string;
-}
-
 export class GetHistoryDto {
   @ApiProperty({
     example: '2024-01-01T00:00:00.000Z',

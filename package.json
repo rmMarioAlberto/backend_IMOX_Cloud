@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "prisma generate --schema=./src/database/prisma/schemaMaria.prisma && nest build",
+    "db:push": "prisma db push --schema=./src/database/prisma/schemaMaria.prisma",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

@@ -4,7 +4,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DatabaseModule } from './modules/database/database.module';
-import { MailModule } from './modules/mail/mail.module';
 import { IotModule } from './modules/iot/iot.module';
 import { MqttModule } from './modules/mqtt/mqtt.module';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
@@ -23,7 +22,6 @@ import { getThrottlerConfig } from './config/throttler.config';
     UserModule,
     AuthModule,
     DatabaseModule,
-    MailModule,
     IotModule,
     MqttModule,
     TelemetryModule,

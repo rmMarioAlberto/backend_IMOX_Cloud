@@ -1,17 +1,10 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthRedisService } from '../database/auth/auth-redis.service';
 import {
   LoginUserDto,
   LoginResponseDto,
   RefreshTokenResponseDto,
-  RequestResetPasswordDto,
   ResetPasswordDto,
   ResetPasswordResponseDto,
 } from './dto/auth.dto';
@@ -19,7 +12,6 @@ import { MariaDbService } from '../database/mariadb.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
 import { JwtService } from './jwt.service';
-import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AuthService {
@@ -29,7 +21,6 @@ export class AuthService {
     private readonly redisService: AuthRedisService,
     private readonly mariaDbService: MariaDbService,
     private readonly jwtService: JwtService,
-    private readonly mailService: MailService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -214,47 +205,6 @@ export class AuthService {
 
   /**
    * Solicita el restablecimiento de la contraseña de un usuario.
-   * @param requestResetPasswordDto - DTO con email del usuario
-   * @returns DTO con mensaje de éxito
    */
-  async requestPasswordReset(requestResetPasswordDto: RequestResetPasswordDto) {
-    const { email } = requestResetPasswordDto;
-
-    // 1. Rate Limiting: 1 petición cada 120 segudos por email
-    const isBlocked = await this.redisService.shouldBlockRequest(email, 120);
-    if (isBlocked) {
-      throw new HttpException(
-        'Demasiados intentos. Intenta de nuevo en 2 minutos.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-
-    const user = await this.mariaDbService.users.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      // Por seguridad, no decimos si el correo existe o no
-      return {
-        message: 'Si el correo existe, recibirás un código. (Revisa SPAM)',
-      };
-    }
-
-    // Generar código de 6 dígitos
-    const token = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Guardar en Redis (15 minutos de vida)
-    await this.redisService.savePasswordResetToken(token, user.id);
-
-    // Enviar correo real con Brevo
-    await this.mailService.sendResetEmail(email, token);
-
-    return {
-      message: 'Código enviado exitosamente. Revisa tu correo.',
-      debug_token:
-        this.configService.get('NODE_ENV') === 'development'
-          ? token
-          : undefined,
-    };
-  }
+  async requestPasswordReset() {}
 }

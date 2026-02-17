@@ -88,12 +88,3 @@ export class ResponseGetProfileDto {
   @IsNumber()
   role: number;
 }
-/**
- * DTO para la solicitud de editar el perfil del usuario
- */
-export class EditProfileDto {
-  @ApiProperty({ example: 'carlos', description: 'username' })
-  @IsNotEmpty()
-  @IsString()
-  name: string;
-}

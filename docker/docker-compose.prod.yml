@@ -9,8 +9,8 @@ services:
       - MARIADB_DATABASE=${MYSQL_DATABASE:-imox_auth}
       - MARIADB_USER=${MYSQL_USER:-imox_user}
       - MARIADB_PASSWORD=${MYSQL_PASSWORD:-imox_pass}
-    # NO EXPONER PUERTOS - solo acceso interno
-    ports: []
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
     networks:
@@ -47,8 +47,8 @@ services:
     image: redis:7.2-alpine
     container_name: imox_redis
     restart: unless-stopped
-    # NO EXPONER PUERTOS - solo acceso interno
-    ports: []
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     command: >
       redis-server
       --appendonly yes
@@ -88,8 +88,8 @@ services:
     image: influxdb:2.7.10
     container_name: imox_influxdb
     restart: unless-stopped
-    # NO EXPONER PUERTOS - solo acceso interno
-    ports: []
+    ports:
+      - "127.0.0.1:8086:8086"
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USER:-imox_admin}
@@ -135,8 +135,9 @@ services:
     depends_on:
       mariadb:
         condition: service_healthy
-    # NO EXPONER PUERTOS - Cloudflare Tunnel lo maneja
-    ports: []
+    ports:
+      - "127.0.0.1:${MQTT_PORT:-1883}:1883"
+      - "127.0.0.1:${MQTT_WS_PORT:-9001}:9001"
     environment:
       - MYSQL_USER=${MYSQL_USER:-imox_user}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-imox_pass}
@@ -168,80 +169,6 @@ services:
       options:
         max-size: "5m"
         max-file: "2"
-
-  # ==================== NESTJS BACKEND ====================
-  nestjs:
-    build:
-      context: ..
-      dockerfile: docker/nestjs/Dockerfile
-      target: production
-    container_name: imox_nestjs
-    restart: unless-stopped
-    depends_on:
-      influxdb:
-        condition: service_healthy
-      mariadb:
-        condition: service_healthy
-      mosquitto:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    # Solo exponer en localhost para Cloudflare Tunnel
-    ports:
-      - "127.0.0.1:3000:3000"
-    environment:
-      NODE_ENV: production
-      PORT: 3000
-      
-      # Database Connections
-      MYSQL_HOST: mariadb
-      MYSQL_PORT: 3306
-      MYSQL_USER: ${MYSQL_USER:-imox_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-imox_pass}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-imox_auth}
-      
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password_change_in_production}
-      
-      MQTT_BROKER_URL: mqtt://mosquitto:1883
-      
-      # InfluxDB
-      INFLUXDB_URL: http://influxdb:8086
-      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-my-super-secret-auth-token}
-      INFLUXDB_ORG: ${INFLUXDB_ORG:-imox_org}
-      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-imox_bucket}
-      
-    tmpfs:
-      - /app/logs:size=20M
-    networks:
-      - imox_network
-    deploy:
-      resources:
-        limits:
-          memory: 250M
-          cpus: '0.7'
-        reservations:
-          memory: 100M
-    # Security hardening
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/health || exit 1"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
 volumes:
   mariadb_data:

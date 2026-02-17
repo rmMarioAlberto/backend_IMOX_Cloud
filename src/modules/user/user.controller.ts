@@ -3,21 +3,13 @@ import {
   Controller,
   Post,
   Get,
-  UseInterceptors,
-  ClassSerializerInterceptor,
   HttpCode,
   HttpStatus,
   UseGuards,
-  Patch,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import {
-  RegisterUserDto,
-  RegisterResponseDto,
-  ResponseGetProfileDto,
-  EditProfileDto,
-} from './dto/user.dto';
+import { RegisterUserDto, ResponseGetProfileDto } from './dto/user.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
 import {
   ApiBearerAuth,
@@ -78,25 +70,5 @@ export class UserController {
     @GetUser() user: UserPayloadDto,
   ): Promise<ResponseGetProfileDto> {
     return this.userService.getProfile(user);
-  }
-
-  @Patch('editProfile')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Editar perfil de usuario (private)',
-    description: 'Actualiza el nombre del usuario autenticado.',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Perfil actualizado exitosamente.',
-  })
-  async editProfile(
-    @Body() dto: EditProfileDto,
-    @GetUser() user: UserPayloadDto,
-  ): Promise<{ message: string }> {
-    await this.userService.editProfile(dto, user.id);
-    return { message: 'Perfil actualizado exitosamente' };
   }
 }
