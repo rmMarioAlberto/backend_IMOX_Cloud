@@ -26,7 +26,11 @@ jobs:
       - name: Build Application
         run: npm run build
 
+      - name: Sync to Production Directory
+        run: rsync -av --exclude='.env' ./ /home/dietpi/backend_IMOX_Cloud/
+
       - name: Restart PM2
         run: |
-          pm2 reload imox-backend || pm2 start dist/main.js --name imox-backend
+          cd /home/dietpi/backend_IMOX_Cloud
+          pm2 reload imox-backend --update-env || pm2 start dist/main.js --name imox-backend
           pm2 save
