@@ -18,6 +18,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { GetUser } from '../../common/decorators/get-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('User')
 @Controller('user')
@@ -42,6 +43,7 @@ export class UserController {
     status: 400,
     description: 'Datos de entrada inválidos (validación fallida).',
   })
+  @Public()
   async register(
     @Body() registerUserDto: RegisterUserDto,
   ): Promise<{ message: string }> {
