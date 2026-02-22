@@ -1,24 +1,24 @@
+import { Logger, UseFilters } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
   ConnectedSocket,
   MessageBody,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
   WsException,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, UseFilters } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { WsExceptionsFilter } from '../../common/filters/ws-exceptions.filter';
 import { JwtService } from '../auth/jwt.service';
-import { MariaDbService } from '../database/mariadb.service';
-import { TelemetryRedisService } from '../database/telemetry/telemetry-redis.service';
 import { AuthRedisService } from '../database/auth/auth-redis.service';
+import { MariaDbService } from '../database/mariadb.service';
 import { TelemetryInfluxService } from '../database/telemetry/telemetry-influx.service';
+import { TelemetryRedisService } from '../database/telemetry/telemetry-redis.service';
 import { TelemetryResponseDto } from './dto/telemetry-response.dto';
 import { toTelemetryResponse } from './utils/telemetry.mapper';
-import { WsExceptionsFilter } from '../../common/filters/ws-exceptions.filter';
 
 @WebSocketGateway({
   cors: {
@@ -158,15 +158,25 @@ export class TelemetryGateway
     const redisData = await this.redisService.getTelemetryLast(iotId);
 
     if (redisData) {
+      this.logger.debug(
+        `[WS] Datos iniciales obtenidos de Redis para dispositivo ${iotId}`,
+      );
       lastTelemetry = toTelemetryResponse(
         redisData,
         false,
         redisData.anomaly_type,
       );
     } else {
+      this.logger.warn(
+        `[WS] No hay datos en Redis para ${iotId}. Consultando InfluxDB como respaldo...`,
+      );
       // Fallback to InfluxDB if not in Redis
       const influxData =
         await this.telemetryInfluxService.queryLatestTelemetry(iotId);
+
+      this.logger.debug(
+        `[WS] Resultado InfluxDB para dispositivo ${iotId}: ${JSON.stringify(influxData)}`,
+      );
 
       if (influxData) {
         // Map InfluxDB result to TelemetryResponseDto
