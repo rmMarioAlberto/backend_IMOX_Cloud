@@ -109,12 +109,39 @@ export class TelemetryInfluxService {
   }
 
   /**
-   * Consultar última lectura de telemetría desde InfluxDB
+   * Consultar última lectura de telemetría desde InfluxDB.
+   * Usa |> last() en el servidor para ser eficiente y no depender de un
+   * rango fijo: funciona aunque el dispositivo lleve horas/días offline.
    */
   async queryLatestTelemetry(iotId: number): Promise<any> {
     try {
-      const results = await this.queryTelemetryRange(iotId, '-1h');
-      return results.at(-1) ?? null;
+      const queryApi = this.influxDbService.getQueryApi();
+      const bucket = this.influxDbService.getBucket();
+
+      // |> last() filtra del lado de InfluxDB → devuelve solo 1 fila por campo
+      const query = `
+        from(bucket: "${bucket}")
+          |> range(start: -30d)
+          |> filter(fn: (r) => r._measurement == "telemetry")
+          |> filter(fn: (r) => r.iot_id == "${iotId}")
+          |> last()
+          |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+      `;
+
+      const results: any[] = [];
+      return new Promise((resolve, reject) => {
+        queryApi.queryRows(query, {
+          next(row, tableMeta) {
+            results.push(tableMeta.toObject(row));
+          },
+          error(error) {
+            reject(error);
+          },
+          complete() {
+            resolve(results.at(-1) ?? null);
+          },
+        });
+      });
     } catch (error) {
       this.logger.error(
         `Error consultando última telemetría para iotId ${iotId}`,
