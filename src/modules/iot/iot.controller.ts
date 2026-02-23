@@ -30,6 +30,7 @@ import {
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GetUser } from '../../common/decorators/get-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('IoT')
 @ApiBearerAuth()
@@ -42,10 +43,10 @@ export class IotController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Registrar un nuevo dispositivo IoT (Admin)' })
   @ApiCreatedResponse({
-    description: 'El IoT ha sido registrado correctamente.',
+    description: 'El dispositivo IoT ha sido registrado correctamente.',
   })
   @ApiBadRequestResponse({ description: 'Datos de entrada inválidos.' })
-  @ApiForbiddenResponse({ description: 'Prohibido.' })
+  @ApiForbiddenResponse({ description: 'Acceso prohibido.' })
   @ApiConflictResponse({
     description: 'El dispositivo con esta dirección MAC ya existe.',
   })
@@ -57,30 +58,31 @@ export class IotController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Link an IoT device to a user. If already linked, performs soft reset and re-links (private)',
+      'Vincular un dispositivo IoT a un usuario (Aprovisionamiento directo por el dispositivo) (público)',
   })
   @ApiCreatedResponse({
     description:
-      'The IoT device has been successfully linked. If it was previously linked, telemetry data was cleared.',
+      'El dispositivo IoT ha sido vinculado correctamente. Si estaba vinculado previamente, se limpiaron los datos de telemetría.',
   })
-  @ApiBadRequestResponse({ description: 'Device not found or invalid data.' })
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBadRequestResponse({
+    description:
+      'Dispositivo no encontrado, inactivo o credenciales inválidas.',
+  })
+  @Public()
   async linkUserIot(
     @Body() linkIotUserDto: LinkIotUserDto,
-    @GetUser() user: UserPayloadDto,
   ): Promise<{ message: string }> {
-    await this.iotService.linkIotUser(linkIotUserDto, user);
-    return { message: 'Device linked successfully' };
+    await this.iotService.linkIotUser(linkIotUserDto);
+    return { message: 'Dispositivo vinculado correctamente' };
   }
 
   @Get('list')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get all IoT devices for the authenticated user (private)',
+    summary: 'Obtener todos los dispositivos IoT de un usuario (privado)',
   })
   @ApiOkResponse({
-    description: 'List of IoT devices successfully retrieved.',
+    description: 'Lista de dispositivos IoT recuperada con éxito.',
     type: ResponseIotListDto,
   })
   @UseGuards(JwtAuthGuard)
@@ -92,10 +94,11 @@ export class IotController {
   @Post('history')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Get historical telemetry data for charts (private)',
+    summary:
+      'Obtener datos históricos de telemetría para las gráficas (privado)',
   })
   @ApiOkResponse({
-    description: 'Historical readings in lightweight format (columns + data).',
+    description: 'Lecturas históricas en formato ligero (columnas + datos).',
     type: ResponseHistoryLightweightDto,
   })
   @UseGuards(JwtAuthGuard)

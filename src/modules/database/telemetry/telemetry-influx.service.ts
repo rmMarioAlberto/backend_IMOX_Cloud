@@ -109,6 +109,104 @@ export class TelemetryInfluxService {
   }
 
   /**
+   * Consultar telemetría en un rango de tiempo, agrupada por una ventana de tiempo
+   * @param iotId ID del dispositivo IoT
+   * @param start Fecha de inicio
+   * @param stop Fecha final
+   * @param window Ventana de agregación (ej. '5m', '1h', '6h')
+   */
+  async queryAggregatedTelemetry(
+    iotId: number,
+    start: string,
+    stop: string = 'now()',
+    window: string = '1h',
+  ): Promise<any[]> {
+    try {
+      const queryApi = this.influxDbService.getQueryApi();
+      const bucket = this.influxDbService.getBucket();
+
+      const query = `
+        from(bucket: "${bucket}")
+          |> range(start: ${start}, stop: ${stop})
+          |> filter(fn: (r) => r._measurement == "telemetry")
+          |> filter(fn: (r) => r.iot_id == "${iotId}")
+          |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
+          |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+      `;
+
+      const results: any[] = [];
+      return new Promise((resolve, reject) => {
+        queryApi.queryRows(query, {
+          next(row, tableMeta) {
+            const o = tableMeta.toObject(row);
+            results.push(o);
+          },
+          error(error) {
+            reject(error);
+          },
+          complete() {
+            resolve(results);
+          },
+        });
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error consultando telemetría agrupada para iotId ${iotId}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Consultar únicamente las lecturas que tienen anomalías en un rango de tiempo
+   * @param iotId ID del dispositivo IoT
+   * @param start Fecha de inicio
+   * @param stop Fecha final
+   */
+  async queryAnomaliesRange(
+    iotId: number,
+    start: string,
+    stop: string = 'now()',
+  ): Promise<any[]> {
+    try {
+      const queryApi = this.influxDbService.getQueryApi();
+      const bucket = this.influxDbService.getBucket();
+
+      const query = `
+        from(bucket: "${bucket}")
+          |> range(start: ${start}, stop: ${stop})
+          |> filter(fn: (r) => r._measurement == "telemetry")
+          |> filter(fn: (r) => r.iot_id == "${iotId}")
+          |> filter(fn: (r) => exists r.anomaly_type and r.anomaly_type != "NONE")
+          |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+      `;
+
+      const results: any[] = [];
+      return new Promise((resolve, reject) => {
+        queryApi.queryRows(query, {
+          next(row, tableMeta) {
+            const o = tableMeta.toObject(row);
+            results.push(o);
+          },
+          error(error) {
+            reject(error);
+          },
+          complete() {
+            resolve(results);
+          },
+        });
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error consultando anomalías de telemetría para iotId ${iotId}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Consultar última lectura de telemetría desde InfluxDB.
    * Usa |> last() en el servidor para ser eficiente y no depender de un
    * rango fijo: funciona aunque el dispositivo lleve horas/días offline.

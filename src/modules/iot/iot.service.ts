@@ -65,17 +65,12 @@ export class IotService {
   }
 
   /**
-   * Vincular un dispositivo IoT a un usuario
-   * @param linkIotUserDto
-   * @param user
+   * Vincular un dispositivo IoT a un usuario (Autenticado por el propio IoT)
+   * @param linkIotUserDto DTO con MAC, Device Secret y User ID
    * @returns Promise<void>
    */
-  async linkIotUser(
-    linkIotUserDto: LinkIotUserDto,
-    user: UserPayloadDto,
-  ): Promise<void> {
-    const { macAddress } = linkIotUserDto;
-    const { id } = user;
+  async linkIotUser(linkIotUserDto: LinkIotUserDto): Promise<void> {
+    const { macAddress, deviceSecret, userId } = linkIotUserDto;
 
     const checkIot = await this.prismaMysql.iot.findUnique({
       where: {
@@ -84,11 +79,21 @@ export class IotService {
     });
 
     if (!checkIot || checkIot.status == 0) {
-      throw new BadRequestException('Dispositivo no encontrado');
+      throw new BadRequestException('Dispositivo no encontrado o inactivo');
     }
 
-    // Si ya tiene un usuario vinculado, hacer soft reset (borrar telemetría)
-    if (checkIot.user_id) {
+    // Validar de  que el secreto del dispositivo sea correcto
+    const isSecretValid = await bcrypt.compare(
+      deviceSecret,
+      checkIot.device_secret,
+    );
+
+    if (!isSecretValid) {
+      throw new BadRequestException('Credenciales del dispositivo inválidas');
+    }
+
+    // Si ya tiene un usuario vinculado y es distinto, hacer soft reset (borrar telemetría)
+    if (checkIot.user_id && checkIot.user_id !== userId) {
       await this.deleteTelemetryData(checkIot.id);
     }
 
@@ -97,7 +102,7 @@ export class IotService {
         mac_address: macAddress,
       },
       data: {
-        user_id: id,
+        user_id: userId,
       },
     });
   }
@@ -151,16 +156,18 @@ export class IotService {
     });
 
     if (!device) {
-      throw new BadRequestException('Device not found');
+      throw new BadRequestException('Dispositivo no encontrado');
     }
 
     if (device.user_id !== id) {
-      throw new ConflictException('You do not own this device');
+      throw new ConflictException('No eres el dueño de este dispositivo');
     }
 
     // Convertir fechas a formato RFC3339 para InfluxDB
-    const start = new Date(startDate).toISOString();
-    const stop = new Date(endDate).toISOString();
+    const startD = new Date(startDate);
+    const stopD = new Date(endDate);
+    const startIso = startD.toISOString();
+    const stopIso = stopD.toISOString();
 
     const columns = [
       'timestamp',
@@ -168,32 +175,128 @@ export class IotService {
       'corriente',
       'potencia',
       'energia',
+      'anomalia',
     ];
 
     try {
-      // Consultar datos de InfluxDB
-      const influxResults =
-        await this.telemetryInfluxService.queryTelemetryRange(
-          iotId,
-          start,
-          stop,
-        );
+      // Determinar la ventana temporal de agrupación en InfluxDB
+      const diffMs = stopD.getTime() - startD.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      const diffDays = diffHours / 24;
 
-      if (!influxResults || influxResults.length === 0) {
+      let window = '5m';
+      if (diffDays > 7) {
+        window = '6h'; // Para periodos largos (ej. 30 días), 6 horas
+      } else if (diffDays > 2) {
+        window = '1h'; // Menos de 7 días pero más de 2: 1 hora
+      } else if (diffHours > 12) {
+        window = '15m'; // Hasta 2 días
+      }
+
+      // Consultar promedios y anomalías en InfluxDB en paralelo
+      const [aggregatedResults, anomalyResults] = await Promise.all([
+        this.telemetryInfluxService.queryAggregatedTelemetry(
+          iotId,
+          startIso,
+          stopIso,
+          window,
+        ),
+        this.telemetryInfluxService.queryAnomaliesRange(
+          iotId,
+          startIso,
+          stopIso,
+        ),
+      ]);
+
+      if (aggregatedResults.length === 0 && anomalyResults.length === 0) {
         return {
           columns,
           data: [],
         };
       }
 
-      // Transformar resultados de InfluxDB al formato esperado
-      const data = influxResults.map((r) => [
-        r._time,
-        r.voltaje_v ?? 0,
-        r.corriente_a ?? 0,
-        r.potencia_w ?? 0,
-        r.energia_kwh ?? 0,
-      ]);
+      // Combinar y ordenar ambos conjuntos de datos por timestamp
+      const combined = [...aggregatedResults, ...anomalyResults].sort(
+        (a, b) => new Date(a._time).getTime() - new Date(b._time).getTime(),
+      );
+
+      // Transformar y aplicar un leve filtro Deadband final
+      const data: any[][] = [];
+      let lastSavedPoint: any[] | null = null;
+
+      for (let i = 0; i < combined.length; i++) {
+        const r = combined[i];
+
+        // Ignorar filas donde la agregación resultó nula o vacía
+        if (r.voltaje_v === undefined && r.corriente_a === undefined) continue;
+
+        const anomaly = r.anomaly_type || 'NONE';
+
+        const currentPoint = [
+          r._time,
+          Number((r.voltaje_v ?? 0).toFixed(2)),
+          Number((r.corriente_a ?? 0).toFixed(2)),
+          Number((r.potencia_w ?? 0).toFixed(2)),
+          Number((r.energia_kwh ?? 0).toFixed(2)),
+          anomaly,
+        ];
+
+        // Siempre incluir puntos de anomalías o primer/último punto de la serie completa no filtrada
+        if (anomaly !== 'NONE' || i === 0 || i === combined.length - 1) {
+          data.push(currentPoint);
+          lastSavedPoint = currentPoint;
+          continue;
+        }
+
+        // Si es un periodo corto, aplicamos un deadband suave adicional para ahorrar cientos de puntos rectos
+        if (lastSavedPoint && (window === '5m' || window === '15m')) {
+          const vDiff = Math.abs(
+            (currentPoint[1] as number) - (lastSavedPoint[1] as number),
+          );
+          const cDiff = Math.abs(
+            (currentPoint[2] as number) - (lastSavedPoint[2] as number),
+          );
+          const pDiff = Math.abs(
+            (currentPoint[3] as number) - (lastSavedPoint[3] as number),
+          );
+          const timeDiff =
+            new Date(currentPoint[0] as string).getTime() -
+            new Date(lastSavedPoint[0] as string).getTime();
+
+          // Umbrales para suavizado final: > 0.5V, > 0.1A, > 5W
+          const isFluctuation = vDiff > 0.5 || cDiff > 0.1 || pDiff > 5.0;
+          const maxTimeExceeded = timeDiff > 1000 * 60 * 60; // 1 hora máximo sin punto
+
+          if (isFluctuation || maxTimeExceeded) {
+            // Guardar el prevRow para que la línea no sea un triángulo enorme
+            const prevRow = combined[i - 1];
+            if (
+              prevRow &&
+              lastSavedPoint &&
+              lastSavedPoint[0] !== prevRow._time
+            ) {
+              data.push([
+                prevRow._time,
+                Number((prevRow.voltaje_v ?? 0).toFixed(2)),
+                Number((prevRow.corriente_a ?? 0).toFixed(2)),
+                Number((prevRow.potencia_w ?? 0).toFixed(2)),
+                Number((prevRow.energia_kwh ?? 0).toFixed(2)),
+                prevRow.anomaly_type || 'NONE',
+              ]);
+            }
+            data.push(currentPoint);
+            lastSavedPoint = currentPoint;
+          }
+        } else {
+          // Si la ventana ya es grande (1h o 6h), incluimos cada punto agrupado sin importar deadband
+          // evitando duplicados de tiempo que puedan cruzarse de las dos queries
+          if (lastSavedPoint && lastSavedPoint[0] === currentPoint[0]) {
+            continue;
+          }
+          data.push(currentPoint);
+          lastSavedPoint = currentPoint;
+        }
+      }
 
       return {
         columns,
@@ -201,7 +304,7 @@ export class IotService {
       };
     } catch (error) {
       this.logger.error(
-        `Error querying InfluxDB for device ${iotId}: ${error}`,
+        `Error al consultar InfluxDB para el dispositivo ${iotId}: ${error}`,
         error instanceof Error ? error.stack : undefined,
       );
       // Si hay error consultando InfluxDB, devolver datos vacíos
@@ -220,10 +323,12 @@ export class IotService {
   private async deleteTelemetryData(iotId: number): Promise<void> {
     try {
       await this.telemetryInfluxService.deleteTelemetryByIotId(iotId);
-      this.logger.log(`Telemetry data deleted for device ${iotId}`);
+      this.logger.log(
+        `Datos de telemetría eliminados para el dispositivo ${iotId}`,
+      );
     } catch (error) {
       this.logger.error(
-        `Failed to delete telemetry for device ${iotId}`,
+        `Error al eliminar la telemetría para el dispositivo ${iotId}`,
         error instanceof Error ? error.stack : undefined,
       );
     }

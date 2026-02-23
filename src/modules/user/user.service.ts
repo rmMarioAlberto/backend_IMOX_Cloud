@@ -58,4 +58,17 @@ export class UserService {
     }
     return plainToInstance(ResponseGetProfileDto, userFound);
   }
+  /**
+   * Validar si el correo ya está registrado
+   * @param email string
+   * @returns void
+   */
+  async validateEmail(email: string): Promise<void> {
+    const response = await this.mariaDbService.users.findUnique({
+      where: { email: email },
+    });
+    if (response) {
+      throw new ConflictException('El correo ya se encuentra registrado');
+    }
+  }
 }
