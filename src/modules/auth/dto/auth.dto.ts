@@ -5,6 +5,7 @@ import {
   MinLength,
   IsEmail,
   IsOptional,
+  IsNumber,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Exclude, Expose } from 'class-transformer';
@@ -169,20 +170,6 @@ export class RefreshTokenResponseDto {
 }
 
 /**
- * DTO para solicitar el código de recuperación de contraseña
- */
-export class RequestResetPasswordDto {
-  @ApiProperty({
-    example: 'usuario@imox.cloud',
-    description: 'Correo electrónico para enviar el código de recuperación',
-  })
-  @IsString()
-  @IsNotEmpty()
-  @IsEmail()
-  email: string;
-}
-
-/**
  * DTO para restablecer la contraseña de un usuario
  */
 export class ResetPasswordDto {
@@ -196,34 +183,31 @@ export class ResetPasswordDto {
   @IsNotEmpty()
   @MinLength(8)
   @MaxLength(50)
-  password: string;
+  newPassword: string;
+
+  @ApiProperty({
+    example: 1,
+    description: 'ID del usuario',
+  })
+  @IsNumber()
+  @IsNotEmpty()
+  userId: number;
 
   @ApiProperty({
     example: '123456',
-    description: 'Token o Código enviado por correo',
+    description: 'Device secret del dispositivo IoT',
   })
   @IsString()
   @IsNotEmpty()
-  token: string;
-}
+  iotToken: string;
 
-@Exclude()
-/**
- * DTO para la respuesta de restablecer la contraseña de un usuario
- */
-export class ResetPasswordResponseDto {
   @ApiProperty({
-    example: 'Contraseña actualizada exitosamente',
-    description: 'Mensaje de confirmación',
+    example: 'AA:BB:CC:DD:EE:FF',
+    description: 'Dirección MAC del dispositivo IoT',
   })
   @IsString()
   @IsNotEmpty()
-  @Expose()
-  @ApiProperty({
-    example: 'Contraseña actualizada exitosamente',
-    description: 'Mensaje de confirmación',
-  })
-  message: string;
+  macAddress: string;
 }
 
 /**

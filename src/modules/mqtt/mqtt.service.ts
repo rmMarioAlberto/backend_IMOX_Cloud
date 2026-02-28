@@ -9,7 +9,7 @@ import { SpikeDetectorService } from '../telemetry/spike-detector.service';
 import { TelemetryGateway } from '../telemetry/telemetry.gateway';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { MqttTelemetryDto } from './dto/mqtt.dto';
+import { MqttTelemetryDto, MqttHistoryRequestDto } from './dto/mqtt.dto';
 import { toTelemetryResponse } from '../telemetry/utils/telemetry.mapper';
 
 @Injectable()
@@ -72,23 +72,44 @@ export class MqttService implements OnModuleInit {
   }
 
   /**
-   * @description Método que se encarga de suscribirse a los tópicos de MQTT
+   * @description Suscribe al broker los tópicos de telemetría e historial
    */
   private subscribeToTopics() {
-    const topic = 'imox/devices/+/telemetry';
-    this.client.subscribe(topic, (err) => {
+    const telemetryTopic = 'imox/devices/+/telemetry';
+    const historyTopic = 'imox/devices/+/history/request';
+
+    this.client.subscribe(telemetryTopic, (err) => {
       if (err) {
-        this.logger.error(`Error suscribiéndose a ${topic}:`, err);
+        this.logger.error(`Error suscribiéndose a ${telemetryTopic}:`, err);
       } else {
-        this.logger.log(`Suscrito a: ${topic}`);
+        this.logger.log(`Suscrito a: ${telemetryTopic}`);
+      }
+    });
+
+    this.client.subscribe(historyTopic, (err) => {
+      if (err) {
+        this.logger.error(`Error suscribiéndose a ${historyTopic}:`, err);
+      } else {
+        this.logger.log(`Suscrito a: ${historyTopic}`);
       }
     });
   }
 
   /**
-   * @description Método que se encarga de manejar los mensajes recibidos de MQTT
+   * @description Despacha el mensaje al handler correspondiente según el tópico
    */
   private async handleMessage(topic: string, payload: Buffer) {
+    if (topic.endsWith('/telemetry')) {
+      await this.handleTelemetry(topic, payload);
+    } else if (topic.endsWith('/history/request')) {
+      await this.handleHistoryRequest(topic, payload);
+    }
+  }
+
+  /**
+   * @description Procesa los mensajes de telemetría en tiempo real enviados por el dispositivo
+   */
+  private async handleTelemetry(topic: string, payload: Buffer) {
     try {
       const rawData = JSON.parse(payload.toString());
       const iotId = this.extractIotIdFromTopic(topic);
@@ -165,6 +186,179 @@ export class MqttService implements OnModuleInit {
     } catch (error) {
       this.logger.error('Error procesando mensaje MQTT:', error);
     }
+  }
+
+  /**
+   * @description Atiende una petición de historial de un dispositivo IoT.
+   * El dispositivo publica { startDate, endDate } en imox/devices/{id}/history/request
+   * y el backend responde en imox/devices/{id}/history/response con los datos comprimidos.
+   * La agregación por ventana temporal + filtro deadband garantiza que no se envían
+   * miles de puntos, sino solo los significativos.
+   */
+  private async handleHistoryRequest(topic: string, payload: Buffer) {
+    const iotId = this.extractIotIdFromTopic(topic);
+    const responseTopic = `imox/devices/${iotId}/history/response`;
+
+    try {
+      const rawData = JSON.parse(payload.toString());
+      const dto = plainToInstance(MqttHistoryRequestDto, rawData, {
+        excludeExtraneousValues: true,
+      });
+
+      const errors = await validate(dto);
+      if (errors.length > 0) {
+        this.logger.warn(
+          `Petición de historial inválida del dispositivo ${iotId}: ${JSON.stringify(errors)}`,
+        );
+        this.publish(responseTopic, { error: 'Parámetros inválidos' });
+        return;
+      }
+
+      const startD = new Date(dto.startDate);
+      const stopD = new Date(dto.endDate);
+      const startIso = startD.toISOString();
+      const stopIso = stopD.toISOString();
+
+      // Determinar ventana de agregación según el rango solicitado (igual que en IotService)
+      const diffMs = stopD.getTime() - startD.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      const diffDays = diffHours / 24;
+
+      let window = '5m';
+      if (diffDays > 7) {
+        window = '6h';
+      } else if (diffDays > 2) {
+        window = '1h';
+      } else if (diffHours > 12) {
+        window = '15m';
+      }
+
+      const [aggregatedResults, anomalyResults] = await Promise.all([
+        this.influxService.queryAggregatedTelemetry(
+          iotId,
+          startIso,
+          stopIso,
+          window,
+        ),
+        this.influxService.queryAnomaliesRange(iotId, startIso, stopIso),
+      ]);
+
+      const columns = [
+        'timestamp',
+        'voltaje',
+        'corriente',
+        'potencia',
+        'energia',
+        'anomalia',
+      ];
+
+      if (aggregatedResults.length === 0 && anomalyResults.length === 0) {
+        this.publish(responseTopic, { columns, data: [] });
+        return;
+      }
+
+      const combined = [...aggregatedResults, ...anomalyResults].sort(
+        (a, b) => new Date(a._time).getTime() - new Date(b._time).getTime(),
+      );
+
+      const data = this.applyDeadband(combined, window);
+
+      this.logger.debug(
+        `Historial para dispositivo ${iotId}: ${data.length} puntos (ventana: ${window})`,
+      );
+
+      this.publish(responseTopic, { columns, data });
+    } catch (error) {
+      this.logger.error(
+        `Error procesando historial para dispositivo ${iotId}:`,
+        error,
+      );
+      this.publish(responseTopic, {
+        error: 'Error interno al consultar historial',
+      });
+    }
+  }
+
+  /**
+   * @description Publica un mensaje JSON en un tópico MQTT
+   */
+  private publish(topic: string, payload: object): void {
+    this.client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
+      if (err) {
+        this.logger.error(`Error publicando en ${topic}:`, err);
+      }
+    });
+  }
+
+  /**
+   * @description Convierte una fila de InfluxDB a un punto de gráfica
+   */
+  private toDataPoint(r: any): any[] {
+    return [
+      r._time,
+      Number((r.voltaje_v ?? 0).toFixed(2)),
+      Number((r.corriente_a ?? 0).toFixed(2)),
+      Number((r.potencia_w ?? 0).toFixed(2)),
+      Number((r.energia_kwh ?? 0).toFixed(2)),
+      r.anomaly_type || 'NONE',
+    ];
+  }
+
+  /**
+   * @description Aplica filtro deadband a la serie combinada.
+   * Sólo guarda puntos donde hay cambio significativo en voltaje (>0.5V),
+   */
+  private applyDeadband(combined: any[], window: string): any[][] {
+    const data: any[][] = [];
+    let lastSavedPoint: any[] | null = null;
+
+    for (let i = 0; i < combined.length; i++) {
+      const r = combined[i];
+      if (r.voltaje_v === undefined && r.corriente_a === undefined) continue;
+
+      const anomaly: string = r.anomaly_type || 'NONE';
+      const currentPoint = this.toDataPoint(r);
+
+      // Siempre incluir anomalías y puntos extremos de la serie
+      if (anomaly !== 'NONE' || i === 0 || i === combined.length - 1) {
+        data.push(currentPoint);
+        lastSavedPoint = currentPoint;
+        continue;
+      }
+
+      if (lastSavedPoint && (window === '5m' || window === '15m')) {
+        const vDiff = Math.abs(
+          (currentPoint[1] as number) - (lastSavedPoint[1] as number),
+        );
+        const cDiff = Math.abs(
+          (currentPoint[2] as number) - (lastSavedPoint[2] as number),
+        );
+        const pDiff = Math.abs(
+          (currentPoint[3] as number) - (lastSavedPoint[3] as number),
+        );
+        const timeDiff =
+          new Date(currentPoint[0] as string).getTime() -
+          new Date(lastSavedPoint[0] as string).getTime();
+
+        const isFluctuation = vDiff > 0.5 || cDiff > 0.1 || pDiff > 5;
+        const maxTimeExceeded = timeDiff > 1000 * 60 * 60;
+
+        if (isFluctuation || maxTimeExceeded) {
+          const prevRow = combined[i - 1];
+          if (prevRow && lastSavedPoint[0] !== prevRow._time) {
+            data.push(this.toDataPoint(prevRow));
+          }
+          data.push(currentPoint);
+          lastSavedPoint = currentPoint;
+        }
+      } else {
+        if (lastSavedPoint && lastSavedPoint[0] === currentPoint[0]) continue;
+        data.push(currentPoint);
+        lastSavedPoint = currentPoint;
+      }
+    }
+
+    return data;
   }
 
   /**

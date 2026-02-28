@@ -20,7 +20,6 @@ import {
   LoginUserDto,
   LoginResponseDto,
   ResetPasswordDto,
-  ResetPasswordResponseDto,
   LoginResponseControllerDto,
   RefreshTokenResponseControllerDto,
 } from './dto/auth.dto';
@@ -136,18 +135,21 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Restablecer contraseña (public)',
-    description: 'Cambia la contraseña usando el token/código recibido.',
+    description:
+      'Cambia la contraseña usando el token del dispositivo IoT vinculado al usuario.',
   })
   @ApiResponse({
     status: 200,
     description: 'Contraseña actualizada exitosamente',
-    type: ResetPasswordResponseDto,
   })
   @ApiResponse({
     status: 401,
-    description: 'Código inválido o expirado',
+    description: 'Token IoT inválido o usuario sin dispositivos vinculados',
   })
-  resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto);
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+  ): Promise<{ message: string }> {
+    await this.authService.resetPassword(dto);
+    return { message: 'Contraseña actualizada exitosamente' };
   }
 }

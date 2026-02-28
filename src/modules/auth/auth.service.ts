@@ -1,12 +1,10 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AuthRedisService } from '../database/auth/auth-redis.service';
 import {
   LoginUserDto,
   LoginResponseDto,
   RefreshTokenResponseDto,
   ResetPasswordDto,
-  ResetPasswordResponseDto,
 } from './dto/auth.dto';
 import { MariaDbService } from '../database/mariadb.service';
 import * as bcrypt from 'bcrypt';
@@ -21,7 +19,6 @@ export class AuthService {
     private readonly redisService: AuthRedisService,
     private readonly mariaDbService: MariaDbService,
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -172,39 +169,52 @@ export class AuthService {
   }
 
   /**
-   * Restablece la contraseña de un usuario usando el token/código recibido.
-   * @param resetPasswordDto - DTO con token y nueva contraseña
-   * @returns DTO con mensaje de éxito
+   * Restablece la contraseña de un usuario usando la MAC y el device secret de su IoT.
+   *
+   * Caso normal : el IoT ya está vinculado al usuario   → valida y resetea.
+   * Caso A      : el IoT no tiene dueño                → vincula al usuario y resetea.
+   * Rechazado   : credenciales inválidas o IoT de otro usuario.
+   *
+   * @param resetPasswordDto - DTO con userId, macAddress, iotToken y nueva contraseña
+   * @returns Promise<void>
    */
-  async resetPassword(
-    resetPasswordDto: ResetPasswordDto,
-  ): Promise<ResetPasswordResponseDto> {
-    const { token, password } = resetPasswordDto;
+  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
+    const { newPassword, iotToken, userId, macAddress } = resetPasswordDto;
 
-    // 1. Validar token en Redis
-    const userId = await this.redisService.getPasswordResetUserId(token);
-
-    if (!userId) {
-      throw new UnauthorizedException('Código inválido o expirado');
-    }
-
-    // 2. Hash nueva contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 3. Actualizar usuario
-    await this.mariaDbService.users.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
+    // 1. Buscar el IoT por MAC (lookup rápido por índice único)
+    const device = await this.mariaDbService.iot.findUnique({
+      where: { mac_address: macAddress },
     });
 
-    // 4. Eliminar token de Redis (para que no se use 2 veces)
-    await this.redisService.deletePasswordResetToken(token);
+    // Respuesta genérica: no revelar si la MAC existe o no
+    if (!device?.device_secret) {
+      throw new UnauthorizedException('Credenciales inválidas.');
+    }
 
-    return { message: 'Contraseña actualizada exitosamente' };
+    // 2. Verificar posesión física con el device secret
+    const isSecretValid = await bcrypt.compare(iotToken, device.device_secret);
+    if (!isSecretValid) {
+      throw new UnauthorizedException('Credenciales inválidas.');
+    }
+
+    // 3. Verificar propiedad del IoT
+    //    - Sin dueño       → Caso A: se vincula al usuario
+    //    - Mismo usuario   → caso normal
+    //    - Otro usuario    → rechazado (no se puede usar el IoT ajeno)
+    if (device.user_id == null) {
+      await this.mariaDbService.iot.update({
+        where: { mac_address: macAddress },
+        data: { user_id: userId },
+      });
+    } else if (device.user_id !== userId) {
+      throw new UnauthorizedException('Credenciales inválidas.');
+    }
+
+    // 4. Resetear la contraseña
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    await this.mariaDbService.users.update({
+      where: { id: userId },
+      data: { password: hashedNewPassword },
+    });
   }
-
-  /**
-   * Solicita el restablecimiento de la contraseña de un usuario.
-   */
-  async requestPasswordReset() {}
 }

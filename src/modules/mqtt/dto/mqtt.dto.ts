@@ -3,6 +3,7 @@ import {
   IsString,
   IsOptional,
   ValidateNested,
+  IsISO8601,
 } from 'class-validator';
 import { Type, Expose } from 'class-transformer';
 
@@ -89,4 +90,18 @@ export class MqttTelemetryDto {
   @IsString()
   @IsOptional()
   anomaly_type?: 'NONE' | 'SPIKE' | 'LIMIT';
+}
+
+/**
+ * @description Petición de datos históricos enviada por el dispositivo IoT vía MQTT.
+ * El dispositivo publica en: imox/devices/{iotId}/history/request
+ */
+export class MqttHistoryRequestDto {
+  @Expose()
+  @IsISO8601()
+  startDate: string;
+
+  @Expose()
+  @IsISO8601()
+  endDate: string;
 }
