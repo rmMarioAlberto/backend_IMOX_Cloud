@@ -22,7 +22,23 @@ import { toTelemetryResponse } from './utils/telemetry.mapper';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      // Leer origen permitido desde variable de entorno (igual que corsConfig HTTP)
+      // En desarrollo o si no está definido se permite *
+      const corsOrigins = process.env.CORS_ORIGINS;
+      if (!corsOrigins || corsOrigins === '*' || !origin) {
+        return callback(null, true);
+      }
+      const allowed = corsOrigins.split(',').map((o) => o.trim());
+      if (allowed.includes(origin)) {
+        return callback(null, true);
+      }
+      callback(new Error(`Origen WebSocket no permitido: ${origin}`));
+    },
+    credentials: true,
   },
   namespace: 'telemetry',
 })
@@ -45,7 +61,8 @@ export class TelemetryGateway
   ) {}
 
   /**
-   * @description Método que se ejecuta cuando un cliente se conecta
+   * Maneja la conexión de un nuevo cliente WebSocket.
+   * Verifica el token JWT y la lista negra de tokens.
    */
   async handleConnection(client: Socket) {
     try {
@@ -80,40 +97,29 @@ export class TelemetryGateway
   }
 
   /**
-   * @description Método que se ejecuta cuando un cliente se desconecta
+   * Maneja la desconexión de un cliente WebSocket.
    */
   handleDisconnect(client: Socket) {
     this.logger.log(`Cliente desconectado: ${client.id}`);
   }
 
   /**
-   * @description Método que se encarga de suscribirse a los tópicos de MQTT
+   * Maneja la suscripción de un cliente WebSocket a un dispositivo IoT específico.
+   * Valida autenticación, propiedad del dispositivo y envía última telemetría disponible.
    */
   @SubscribeMessage('subscribeToDevice')
   async handleSubscribeToDevice(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { iotId: number },
   ) {
-    try {
-      return await this.subscribeLogic(client, data);
-    } catch (error) {
-      new WsExceptionsFilter(this.configService).catch(error, {
-        switchToWs: () => ({
-          getClient: () => client,
-          getData: () => data,
-        }),
-      } as any);
-    }
+    return await this.subscribeLogic(client, data);
   }
 
-  /**
-   * @description Método que se encarga de suscribirse a los tópicos de MQTT
-   */
   private async subscribeLogic(client: Socket, data: { iotId: number }) {
     const iotId = data.iotId;
     if (!iotId) {
       throw new WsException({
-        message: 'iotId is required',
+        message: 'El campo iotId es requerido',
         errorCode: 'INVALID_DATA',
       });
     }
@@ -121,7 +127,7 @@ export class TelemetryGateway
     const user = client.data.user;
     if (!user) {
       throw new WsException({
-        message: 'Unauthorized',
+        message: 'No autenticado',
         errorCode: 'UNAUTHORIZED',
       });
     }
@@ -133,12 +139,12 @@ export class TelemetryGateway
 
     if (!device) {
       throw new WsException({
-        message: 'Device not found',
+        message: 'Dispositivo no encontrado',
         errorCode: 'NOT_FOUND',
       });
     }
 
-    // Allow access if user owns the device OR if user is admin (optional, sticking to owner for now based on previous code)
+    // Verificar que el usuario es dueño del dispositivo
     const isOwner = device.user_id === user.sub;
 
     if (!isOwner) {
@@ -146,7 +152,7 @@ export class TelemetryGateway
         `Acceso denegado: Usuario ${user.sub} intentó suscribirse a dispositivo ${iotId}`,
       );
       throw new WsException({
-        message: 'Forbidden: You do not own this device',
+        message: 'Prohibido: No eres dueño de este dispositivo',
         errorCode: 'FORBIDDEN',
       });
     }
@@ -216,7 +222,7 @@ export class TelemetryGateway
   }
 
   /**
-   * @description Método que se encarga de desuscribirse de los tópicos de MQTT
+   * Maneja la dessuscripción de un cliente WebSocket de un dispositivo IoT.
    */
   @SubscribeMessage('unsubscribeFromDevice')
   handleUnsubscribeFromDevice(
@@ -234,7 +240,10 @@ export class TelemetryGateway
   }
 
   /**
-   * @description Método que se encarga de transmitir los datos de telemetría a los clientes suscritos
+   * Transmite los datos de telemetría a los clientes suscritos a un dispositivo específico.
+   *
+   * @param iotId ID del dispositivo IoT
+   * @param data Datos de telemetría procesados
    */
   broadcastTelemetry(iotId: number, data: TelemetryResponseDto) {
     this.server.to(`device:${iotId}`).emit('telemetry', data);

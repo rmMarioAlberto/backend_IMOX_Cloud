@@ -31,7 +31,7 @@ export class MqttService implements OnModuleInit {
   }
 
   /**
-   * @description Método que se ejecuta cuando el módulo se inicializa
+   * Conecta el cliente al broker MQTT usando las credenciales configuradas.
    */
   private async connectToBroker() {
     const brokerUrl =
@@ -72,7 +72,7 @@ export class MqttService implements OnModuleInit {
   }
 
   /**
-   * @description Suscribe al broker los tópicos de telemetría e historial
+   * Suscribe el cliente a los tópicos de telemetría y peticiones de historial.
    */
   private subscribeToTopics() {
     const telemetryTopic = 'imox/devices/+/telemetry';
@@ -96,7 +96,7 @@ export class MqttService implements OnModuleInit {
   }
 
   /**
-   * @description Despacha el mensaje al handler correspondiente según el tópico
+   * Despacha los mensajes recibidos al manejador correspondiente según el tópico.
    */
   private async handleMessage(topic: string, payload: Buffer) {
     if (topic.endsWith('/telemetry')) {
@@ -305,8 +305,10 @@ export class MqttService implements OnModuleInit {
   }
 
   /**
-   * @description Aplica filtro deadband a la serie combinada.
-   * Sólo guarda puntos donde hay cambio significativo en voltaje (>0.5V),
+   * Aplica un filtro de suavizado (deadband) a la serie de telemetría para optimizar almacenamiento.
+   *
+   * @param combined Datos combinados de telemetría
+   * @param window Ventana de agregación utilizada
    */
   private applyDeadband(combined: any[], window: string): any[][] {
     const data: any[][] = [];
@@ -320,39 +322,21 @@ export class MqttService implements OnModuleInit {
       const currentPoint = this.toDataPoint(r);
 
       // Siempre incluir anomalías y puntos extremos de la serie
-      if (anomaly !== 'NONE' || i === 0 || i === combined.length - 1) {
+      if (this.isEssentialPoint(anomaly, i, combined.length)) {
         data.push(currentPoint);
         lastSavedPoint = currentPoint;
         continue;
       }
 
-      if (lastSavedPoint && (window === '5m' || window === '15m')) {
-        const vDiff = Math.abs(
-          (currentPoint[1] as number) - (lastSavedPoint[1] as number),
-        );
-        const cDiff = Math.abs(
-          (currentPoint[2] as number) - (lastSavedPoint[2] as number),
-        );
-        const pDiff = Math.abs(
-          (currentPoint[3] as number) - (lastSavedPoint[3] as number),
-        );
-        const timeDiff =
-          new Date(currentPoint[0] as string).getTime() -
-          new Date(lastSavedPoint[0] as string).getTime();
+      const inclusion = this.evaluatePointInclusion(
+        currentPoint,
+        lastSavedPoint,
+        window,
+        combined[i - 1],
+      );
 
-        const isFluctuation = vDiff > 0.5 || cDiff > 0.1 || pDiff > 5;
-        const maxTimeExceeded = timeDiff > 1000 * 60 * 60;
-
-        if (isFluctuation || maxTimeExceeded) {
-          const prevRow = combined[i - 1];
-          if (prevRow && lastSavedPoint[0] !== prevRow._time) {
-            data.push(this.toDataPoint(prevRow));
-          }
-          data.push(currentPoint);
-          lastSavedPoint = currentPoint;
-        }
-      } else {
-        if (lastSavedPoint && lastSavedPoint[0] === currentPoint[0]) continue;
+      if (inclusion.shouldInclude) {
+        if (inclusion.prevPoint) data.push(inclusion.prevPoint);
         data.push(currentPoint);
         lastSavedPoint = currentPoint;
       }
@@ -362,7 +346,73 @@ export class MqttService implements OnModuleInit {
   }
 
   /**
-   * @description Método que se encarga de extraer el id del IoT del tópico
+   * Determina si un punto es esencial (anomalía o extremo).
+   *
+   * @param anomaly Tipo de anomalía
+   * @param index Índice actual
+   * @param total Total de puntos
+   */
+  private isEssentialPoint(
+    anomaly: string,
+    index: number,
+    total: number,
+  ): boolean {
+    return anomaly !== 'NONE' || index === 0 || index === total - 1;
+  }
+
+  /**
+   * Evalúa si un punto debe ser incluido basado en la ventana y fluctuaciones.
+   *
+   * @param current Punto actual
+   * @param last Último punto guardado
+   * @param window Ventana de agregación
+   * @param prevRaw Punto anterior sin procesar
+   */
+  private evaluatePointInclusion(
+    current: any[],
+    last: any[] | null,
+    window: string,
+    prevRaw: any,
+  ): { shouldInclude: boolean; prevPoint?: any[] } {
+    if (!last) return { shouldInclude: true };
+
+    if (window === '5m' || window === '15m') {
+      if (this.checkFluctuation(current, last)) {
+        const prevPoint =
+          prevRaw && last[0] !== prevRaw._time
+            ? this.toDataPoint(prevRaw)
+            : undefined;
+        return { shouldInclude: true, prevPoint };
+      }
+      return { shouldInclude: false };
+    }
+
+    return { shouldInclude: last[0] !== current[0] };
+  }
+
+  /**
+   * Verifica si existe un cambio significativo entre dos puntos de telemetría.
+   *
+   * @param current Punto actual
+   * @param last Último punto guardado
+   * @returns Verdadero si el cambio es significativo (Deadband)
+   */
+  private checkFluctuation(current: any[], last: any[]): boolean {
+    const vDiff = Math.abs((current[1] as number) - (last[1] as number));
+    const cDiff = Math.abs((current[2] as number) - (last[2] as number));
+    const pDiff = Math.abs((current[3] as number) - (last[3] as number));
+    const timeDiff =
+      new Date(current[0] as string).getTime() -
+      new Date(last[0] as string).getTime();
+
+    const isFluctuation = vDiff > 0.5 || cDiff > 0.1 || pDiff > 5;
+    const maxTimeExceeded = timeDiff > 1000 * 60 * 60; // 1 hora
+
+    return isFluctuation || maxTimeExceeded;
+  }
+
+  /**
+   * Extrae el ID del dispositivo IoT a partir del tópico MQTT.
    */
   private extractIotIdFromTopic(topic: string): number {
     const parts = topic.split('/');
@@ -370,7 +420,7 @@ export class MqttService implements OnModuleInit {
   }
 
   /**
-   * @description Método que se ejecuta cuando el módulo se destruye
+   * Ejecuta tareas de limpieza cuando el módulo se destruye.
    */
   async onModuleDestroy() {
     if (this.client) {

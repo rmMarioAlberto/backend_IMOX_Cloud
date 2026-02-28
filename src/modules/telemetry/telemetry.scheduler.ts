@@ -144,7 +144,7 @@ export class TelemetryScheduler {
           : new Date().toISOString(),
         anomaly_type:
           reading.type === 'critical' ? reading.anomaly_type : undefined,
-      } as any);
+      });
     }
   }
 

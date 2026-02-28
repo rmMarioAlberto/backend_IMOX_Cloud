@@ -10,22 +10,6 @@ import { Exclude, Expose } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
- * DTO para la validación de disponibilidad de correo
- */
-export class ValidateEmailDto {
-  @ApiProperty({
-    example: 'usuario@imox.cloud',
-    description: 'Correo electrónico a validar',
-    maxLength: 50,
-  })
-  @IsString()
-  @IsNotEmpty()
-  @IsEmail()
-  @MaxLength(50)
-  email: string;
-}
-
-/**
  * DTO para registrar un nuevo usuario
  */
 export class RegisterUserDto {

@@ -5,15 +5,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import {
-  RegisterUserDto,
-  ResponseGetProfileDto,
-  ValidateEmailDto,
-} from './dto/user.dto';
+import { RegisterUserDto, ResponseGetProfileDto } from './dto/user.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { GetUser } from '../../common/decorators/get-user.decorator';
@@ -28,7 +22,7 @@ export class UserController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Registrar un nuevo usuario (public)',
-    description: 'Crea un usuario en PostgreSQL si el email no existe.',
+    description: 'Crea un usuario en MariaDB si el email no existe.',
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -65,37 +59,9 @@ export class UserController {
     status: HttpStatus.BAD_REQUEST,
     description: 'Usuario no encontrado.',
   })
-  @UseGuards(JwtAuthGuard)
   async getProfile(
     @GetUser() user: UserPayloadDto,
   ): Promise<ResponseGetProfileDto> {
     return this.userService.getProfile(user);
-  }
-
-  @Post('validateEmail')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Validar disponibilidad de correo (public)',
-    description:
-      'Verifica si un correo electrónico ya está registrado. Retorna 200 si está disponible, o lanza un error 409 (Conflict) si ya existe.',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'El correo electrónico está disponible.',
-  })
-  @ApiResponse({
-    status: HttpStatus.CONFLICT,
-    description: 'El correo electrónico ya se encuentra registrado.',
-  })
-  @ApiResponse({
-    status: HttpStatus.BAD_REQUEST,
-    description: 'Datos de entrada inválidos (ej. correo mal formado).',
-  })
-  @Public()
-  async validateEmail(
-    @Body() validateEmailDto: ValidateEmailDto,
-  ): Promise<{ message: string }> {
-    await this.userService.validateEmail(validateEmailDto.email);
-    return { message: 'Correo válido' };
   }
 }

@@ -13,11 +13,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly redisService: AuthRedisService,
     configService: ConfigService,
   ) {
+    const jwtSecret = configService.get<string>('JWT_ACCESS_SECRET');
+    if (!jwtSecret) {
+      throw new Error(
+        'JWT_ACCESS_SECRET no está configurado. Define esta variable de entorno antes de iniciar el servidor.',
+      );
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        configService.get<string>('JWT_ACCESS_SECRET') || 'secretKey',
+      secretOrKey: jwtSecret,
       passReqToCallback: true,
     });
   }

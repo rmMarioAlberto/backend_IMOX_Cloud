@@ -73,8 +73,9 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Cerrar sesión (private)',
-    description: 'Invalida el Refresh Token del usuario.',
+    summary: 'Cerrar sesión (public)',
+    description:
+      'Invalida el Refresh Token del usuario desde la cookie httpOnly.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -96,7 +97,7 @@ export class AuthController {
   @Post('refresh-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Refrescar Access Token (private)',
+    summary: 'Refrescar Access Token (public)',
     description:
       'Genera un nuevo par de tokens usando un Refresh Token válido desde cookies.',
   })
