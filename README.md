@@ -92,7 +92,7 @@ npm run db:push
 
 ---
 
-## 🏭 Producción (Raspberry Pi)
+## Producción (Raspberry Pi)
 
 En entornos limitados (como RPi), ejecutamos solo la infraestructura en Docker y el backend en el host "bare metal" para mejor rendimiento.
 
