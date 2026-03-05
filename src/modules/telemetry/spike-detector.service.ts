@@ -66,32 +66,59 @@ export class SpikeDetectorService {
     const currentElectrical = current.electricas;
     const baselineElectrical = baseline.electricas;
 
-    const calculateChange = (curr: number | null, base: number | null) => {
+    const calculateChange = (
+      curr: number | null,
+      base: number | null,
+      minDiff: number,
+    ) => {
       if (curr === null || base === null) return 0;
+      
+      const diff = Math.abs(curr - base);
+
+      // Filtro de ruido (Deadband absoluto mínimo):
+      // Si la diferencia absoluta es diminuta, no disparamos el cálculo porcentual.
+      if (diff < minDiff) return 0;
+
       if (base === 0) return curr > 0 ? 1 : 0;
-      return Math.abs((curr - base) / base);
+      return diff / base;
     };
 
     const voltageChange = calculateChange(
       currentElectrical.voltaje_v,
       baselineElectrical.voltaje_v,
+      5.0, // Deadband: 5 Volts
     );
 
     const currentChange = calculateChange(
       currentElectrical.corriente_a,
       baselineElectrical.corriente_a,
+      0.5, // Deadband: 0.5 Amperes
     );
 
-    if (voltageChange > this.threshold || currentChange > this.threshold) {
+    const powerChange = calculateChange(
+      currentElectrical.potencia_w,
+      baselineElectrical.potencia_w,
+      50.0, // Deadband: 50 Watts
+    );
+
+    if (
+      voltageChange > this.threshold ||
+      currentChange > this.threshold ||
+      powerChange > this.threshold
+    ) {
+      let spikeReason = '';
+      if (voltageChange > this.threshold) spikeReason += `Volt ${Math.round(voltageChange * 100)}% `;
+      if (currentChange > this.threshold) spikeReason += `Amp ${Math.round(currentChange * 100)}% `;
+      if (powerChange > this.threshold) spikeReason += `Pwr ${Math.round(powerChange * 100)}% `;
+
       return {
         isCritical: true,
         type: 'SPIKE',
-        message: `Pico detectado: Volt ${Math.round(
-          voltageChange * 100,
-        )}% / Amp ${Math.round(currentChange * 100)}%`,
+        message: `Pico detectado: ${spikeReason.trim()}`,
       };
     }
 
     return { isCritical: false, type: 'NONE' };
   }
 }
+
