@@ -138,7 +138,7 @@ Por defecto, InfluxDB guarda datos infinitamente. Para limitar a 60 días (recom
 
 ---
 
-## 🤖 Automatización de Despliegues (CI/CD)
+## Automatización de Despliegues (CI/CD)
 
 Para actualizar automáticamente la Raspberry Pi cada vez que haces `git push` a `main`:
 
