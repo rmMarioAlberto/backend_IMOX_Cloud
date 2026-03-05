@@ -1,7 +1,7 @@
 const mqtt = require('mqtt');
 
-const BROKER_URL = 'mqtt://localhost:1883'; // Desarrollo local
-//const BROKER_URL = 'wss://dietpi.tail02564c.ts.net:443/mqtt'; // Producción via Tailscale Funnel
+//const BROKER_URL = 'mqtt://localhost:1883'; // Desarrollo local
+const BROKER_URL = 'wss://dietpi.tail02564c.ts.net:443/mqtt'; // Producción via Tailscale Funnel
 const DEVICE_ID = 1; // Asegúrate de que este ID exista en tu DB MariaDB (tabla iot)
 const DEVICE_SECRET = '37308710ba5ea7e7948ad071d53f16ed7962f05050b3514e'; // Reemplaza con el secret real del dispositivo
 const TOPIC = `imox/devices/${DEVICE_ID}/telemetry`;

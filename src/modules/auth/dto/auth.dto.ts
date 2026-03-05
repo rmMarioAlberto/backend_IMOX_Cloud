@@ -194,14 +194,6 @@ export class ResetPasswordDto {
   userId: number;
 
   @ApiProperty({
-    example: '123456',
-    description: 'Device secret del dispositivo IoT',
-  })
-  @IsString()
-  @IsNotEmpty()
-  iotToken: string;
-
-  @ApiProperty({
     example: 'AA:BB:CC:DD:EE:FF',
     description: 'Dirección MAC del dispositivo IoT',
   })

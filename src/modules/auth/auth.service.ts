@@ -169,35 +169,28 @@ export class AuthService {
   }
 
   /**
-   * Restablece la contraseña de un usuario usando la MAC y el device secret de su IoT.
+   * Restablece la contraseña de un usuario usando la MAC de su IoT.
    *
-   * Caso normal : el IoT ya está vinculado al usuario   → valida y resetea.
+   * Caso normal : el IoT ya está vinculado al usuario   → resetea.
    * Caso A      : el IoT no tiene dueño                → vincula al usuario y resetea.
-   * Rechazado   : credenciales inválidas o IoT de otro usuario.
+   * Rechazado   : IoT de otro usuario o no encontrado.
    *
-   * @param resetPasswordDto - DTO con userId, macAddress, iotToken y nueva contraseña
+   * @param resetPasswordDto - DTO con userId, macAddress y nueva contraseña
    * @returns Promise<void>
    */
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
-    const { newPassword, iotToken, userId, macAddress } = resetPasswordDto;
+    const { newPassword, userId, macAddress } = resetPasswordDto;
 
     // 1. Buscar el IoT por MAC (lookup rápido por índice único)
     const device = await this.mariaDbService.iot.findUnique({
       where: { mac_address: macAddress },
     });
 
-    // Respuesta genérica: no revelar si la MAC existe o no
-    if (!device?.device_secret) {
+    if (!device) {
       throw new UnauthorizedException('Credenciales inválidas.');
     }
 
-    // 2. Verificar posesión física con el device secret
-    const isSecretValid = await bcrypt.compare(iotToken, device.device_secret);
-    if (!isSecretValid) {
-      throw new UnauthorizedException('Credenciales inválidas.');
-    }
-
-    // 3. Verificar propiedad del IoT
+    // 2. Verificar propiedad del IoT
     //    - Sin dueño       → Caso A: se vincula al usuario
     //    - Mismo usuario   → caso normal
     //    - Otro usuario    → rechazado (no se puede usar el IoT ajeno)
@@ -210,7 +203,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas.');
     }
 
-    // 4. Resetear la contraseña
+    // 3. Resetear la contraseña
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     await this.mariaDbService.users.update({
       where: { id: userId },

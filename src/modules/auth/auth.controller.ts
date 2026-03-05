@@ -137,7 +137,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Restablecer contraseña (public)',
     description:
-      'Cambia la contraseña usando el token del dispositivo IoT vinculado al usuario.',
+      'Cambia la contraseña usando la dirección MAC del dispositivo IoT vinculado al usuario.',
   })
   @ApiResponse({
     status: 200,
@@ -145,7 +145,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Token IoT inválido o usuario sin dispositivos vinculados',
+    description: 'Dispositivo IoT no encontrado o vincuado a otro usuario',
   })
   async resetPassword(
     @Body() dto: ResetPasswordDto,
