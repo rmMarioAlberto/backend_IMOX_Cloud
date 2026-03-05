@@ -66,7 +66,7 @@ Para detener todo y limpiar volúmenes (reset de fábrica):
 docker compose -f docker/docker-compose.yml down -v
 ```
 
-### 🔍 Ver Logs y Troubleshooting
+### Ver Logs y Troubleshooting
 
 Para ver los logs en tiempo real de todos los servicios:
 
