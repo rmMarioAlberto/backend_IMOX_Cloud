@@ -9,8 +9,8 @@ import {
 import { MariaDbService } from '../database/mariadb.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
-import { Resend } from "resend";
-import { ConfigService } from "@nestjs/config";
+import { MailerSend, EmailParams, Sender, Recipient } from 'mailersend';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from './jwt.service';
 
 @Injectable()
@@ -172,7 +172,18 @@ export class AuthService {
   }
 
   async sendVerificacionCode(email: string): Promise<void> {
-    const resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
+    // 1. Validar que el usuario exista y esté activo
+    const user = await this.mariaDbService.users.findUnique({
+      where: { email, status: 1 },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('El correo no está registrado o la cuenta está inactiva');
+    }
+
+    const mailerSend = new MailerSend({
+      apiKey: this.configService.get<string>('MAILERSEND_API_KEY') || '',
+    });
 
     // Generar un código de 6 dígitos
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -180,12 +191,19 @@ export class AuthService {
     // Guardar en Redis con 5 min de TTL
     await this.redisService.saveVerificationCode(email, code);
 
-    // Enviar email
-    const { error } = await resend.emails.send({
-      from: 'Imox Cloud <onboarding@resend.dev>', 
-      to: email,
-      subject: 'Código de verificación - IMOX Cloud',
-      html: `
+    const sentFrom = new Sender(
+      this.configService.get<string>('MAILERSEND_SENDER_EMAIL') ||
+        'info@trial-7dnv5glpxqkgz85l.mlsender.net',
+      this.configService.get<string>('MAILERSEND_SENDER_NAME') || 'Imox Cloud',
+    );
+    const recipients = [new Recipient(email, email)];
+
+    const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(recipients)
+      .setSubject('Código de verificación - IMOX Cloud')
+      .setHtml(
+        `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
           <h2 style="color: #333; text-align: center;">Restablecer contraseña</h2>
           <p style="font-size: 16px; color: #555;">Tu código de verificación para restablecer tu contraseña en IMOX Cloud es:</p>
@@ -195,11 +213,16 @@ export class AuthService {
           <p style="font-size: 14px; color: #888; text-align: center;">Este código expirará en 5 minutos.</p>
         </div>
       `,
-    });
+      )
+      .setText(
+        `Tu código de verificación para restablecer tu contraseña en IMOX Cloud es: ${code}. Este código expirará en 5 minutos.`,
+      );
 
-    if (error) {
+    try {
+      await mailerSend.email.send(emailParams);
+    } catch (error) {
       this.logger.error(
-        `Error al enviar el email de verificación: ${error.message}`,
+        `Error al enviar el email de verificación via MailerSend: ${error.message}`,
       );
       throw new Error('No se pudo enviar el código de verificación');
     }
