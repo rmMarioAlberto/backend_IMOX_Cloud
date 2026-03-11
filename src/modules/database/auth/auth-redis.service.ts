@@ -111,6 +111,36 @@ export class AuthRedisService {
     await client.del(key);
   }
 
+  /**
+   * Incrementa el contador de intentos de reset por día
+   * @param email
+   * @returns El nuevo valor del contador
+   */
+  async incrementResetAttempt(email: string): Promise<number> {
+    const client = this.redisService.getClient();
+    const key = `imox:auth:reset_limit:${email}`;
+
+    const count = await client.incr(key);
+
+    if (count === 1) {
+      // Primer intento, establecemos TTL de 24 horas
+      await client.expire(key, 24 * 60 * 60);
+    }
+
+    return count;
+  }
+
+  /**
+   * Obtiene el número de intentos realizados hoy
+   * @param email
+   */
+  async getResetAttempts(email: string): Promise<number> {
+    const client = this.redisService.getClient();
+    const key = `imox:auth:reset_limit:${email}`;
+    const count = await client.get(key);
+    return count ? Number.parseInt(count, 10) : 0;
+  }
+
   // ==================== Rate Limiting ====================
 
   /**

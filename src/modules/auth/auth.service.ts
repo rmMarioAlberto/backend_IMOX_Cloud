@@ -178,7 +178,17 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('El correo no está registrado o la cuenta está inactiva');
+      throw new UnauthorizedException(
+        'El correo no está registrado o la cuenta está inactiva',
+      );
+    }
+
+    // 2. Verificar límite de intentos (3 por día)
+    const attempts = await this.redisService.getResetAttempts(email);
+    if (attempts >= 3) {
+      throw new UnauthorizedException(
+        'Has excedido el límite de 3 intentos de restablecimiento por día. Inténtalo de nuevo mañana.',
+      );
     }
 
     const mailerSend = new MailerSend({
@@ -220,6 +230,8 @@ export class AuthService {
 
     try {
       await mailerSend.email.send(emailParams);
+      // Incrementamos el contador de intentos exitosos
+      await this.redisService.incrementResetAttempt(email);
     } catch (error) {
       this.logger.error(
         `Error al enviar el email de verificación via MailerSend: ${error.message}`,
