@@ -84,6 +84,12 @@ export class UserService {
       iotDevices.map((iot) => this.iotService.deleteTelemetryData(iot.id)),
     );
 
+    // Desvincular dispositivos del usuario
+    await this.mariaDbService.iot.updateMany({
+      where: { user_id: idUser },
+      data: { user_id: null },
+    });
+
     // Eliminar el usuario en MariaDB
     await this.mariaDbService.users.delete({ where: { id: idUser } });
   }
