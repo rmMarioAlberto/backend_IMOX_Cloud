@@ -22,6 +22,8 @@ import {
   ResetPasswordDto,
   LoginResponseControllerDto,
   RefreshTokenResponseControllerDto,
+  SendVerificationCodeDto,
+  VerifyCodeDto,
 } from './dto/auth.dto';
 import type { Request, Response } from 'express';
 import { plainToInstance } from 'class-transformer';
@@ -130,6 +132,43 @@ export class AuthController {
     });
 
     return plainToInstance(RefreshTokenResponseControllerDto, response);
+  }
+
+  @Post('send-verification-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Enviar código de verificación (public)',
+    description:
+      'Genera y envía un código de 6 dígitos al email del usuario para restablecer la contraseña.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Código enviado exitosamente',
+  })
+  async sendVerificationCode(
+    @Body() dto: SendVerificationCodeDto,
+  ): Promise<{ message: string }> {
+    await this.authService.sendVerificacionCode(dto.email);
+    return { message: 'Código de verificación enviado exitosamente' };
+  }
+
+  @Post('verify-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verificar código (public)',
+    description: 'Valida que el código ingresado coincida con el guardado en Redis.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Código válido',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Código inválido o expirado',
+  })
+  async verifyCode(@Body() dto: VerifyCodeDto): Promise<{ message: string }> {
+    await this.authService.verifyCode(dto.email, dto.code);
+    return { message: 'Código verificado' };
   }
 
   @Post('reset-password')

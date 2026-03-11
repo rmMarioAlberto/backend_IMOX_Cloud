@@ -80,6 +80,37 @@ export class AuthRedisService {
     await client.del(key);
   }
 
+  // ==================== Verification Code Operations ====================
+
+  /**
+   * Guardar código de verificación (email reset)
+   */
+  async saveVerificationCode(email: string, code: string): Promise<void> {
+    const client = this.redisService.getClient();
+    const key = `imox:auth:verification_code:${email}`;
+    await client.set(key, code, {
+      EX: 5 * 60, // 5 minutos
+    });
+  }
+
+  /**
+   * Obtener código de verificación
+   */
+  async getVerificationCode(email: string): Promise<string | null> {
+    const client = this.redisService.getClient();
+    const key = `imox:auth:verification_code:${email}`;
+    return await client.get(key);
+  }
+
+  /**
+   * Eliminar código de verificación (ya usado)
+   */
+  async deleteVerificationCode(email: string): Promise<void> {
+    const client = this.redisService.getClient();
+    const key = `imox:auth:verification_code:${email}`;
+    await client.del(key);
+  }
+
   // ==================== Rate Limiting ====================
 
   /**

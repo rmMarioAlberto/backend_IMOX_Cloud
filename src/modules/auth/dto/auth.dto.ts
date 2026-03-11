@@ -174,6 +174,25 @@ export class RefreshTokenResponseDto {
  */
 export class ResetPasswordDto {
   @ApiProperty({
+    example: 'usuario@imox.cloud',
+    description: 'Correo electrónico del usuario',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({
+    example: '123456',
+    description: 'Código de verificación de 6 dígitos',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  @MaxLength(6)
+  code: string;
+
+  @ApiProperty({
     example: 'newPassword123',
     description: 'Nueva contraseña del usuario',
     minLength: 8,
@@ -184,22 +203,6 @@ export class ResetPasswordDto {
   @MinLength(8)
   @MaxLength(50)
   newPassword: string;
-
-  @ApiProperty({
-    example: 1,
-    description: 'ID del usuario',
-  })
-  @IsNumber()
-  @IsNotEmpty()
-  userId: number;
-
-  @ApiProperty({
-    example: 'AA:BB:CC:DD:EE:FF',
-    description: 'Dirección MAC del dispositivo IoT',
-  })
-  @IsString()
-  @IsNotEmpty()
-  macAddress: string;
 }
 
 /**
@@ -224,4 +227,44 @@ export class RefreshTokenResponseControllerDto {
   @IsNotEmpty()
   @Expose()
   accessToken: string;
+}
+
+/**
+ * DTO para solicitar el envío de un código de verificación
+ */
+export class SendVerificationCodeDto {
+  @ApiProperty({
+    example: 'usuario@imox.cloud',
+    description: 'Correo electrónico del usuario',
+    maxLength: 50,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsEmail()
+  @MaxLength(50)
+  email: string;
+}
+
+/**
+ * DTO para verificar un código enviado por email
+ */
+export class VerifyCodeDto {
+  @ApiProperty({
+    example: 'usuario@imox.cloud',
+    description: 'Correo electrónico del usuario',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({
+    example: '123456',
+    description: 'Código de verificación de 6 dígitos',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  @MaxLength(6)
+  code: string;
 }

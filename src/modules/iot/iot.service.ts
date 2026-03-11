@@ -234,7 +234,7 @@ export class IotService {
    * @param iotId
    * @returns Promise<void>
    */
-  private async deleteTelemetryData(iotId: number): Promise<void> {
+  async deleteTelemetryData(iotId: number): Promise<void> {
     try {
       await this.telemetryInfluxService.deleteTelemetryByIotId(iotId);
       this.logger.log(

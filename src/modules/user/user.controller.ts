@@ -64,4 +64,25 @@ export class UserController {
   ): Promise<ResponseGetProfileDto> {
     return this.userService.getProfile(user);
   }
+
+  @Post('delete-account')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Eliminar cuenta de usuario (private)',
+    description: 'Elimina permanentemente la cuenta del usuario y sus datos de telemetría asociados.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Cuenta eliminada exitosamente.',
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Usuario no encontrado.',
+  })
+  async deleteAccount(
+    @GetUser() user: UserPayloadDto,
+  ): Promise<{ message: string }> {
+    await this.userService.deleteAccount(user.id);
+    return { message: 'Cuenta eliminada exitosamente' };
+  }
 }

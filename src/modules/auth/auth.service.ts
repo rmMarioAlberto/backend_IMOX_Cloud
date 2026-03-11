@@ -9,6 +9,8 @@ import {
 import { MariaDbService } from '../database/mariadb.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
+import { Resend } from "resend";
+import { ConfigService } from "@nestjs/config";
 import { JwtService } from './jwt.service';
 
 @Injectable()
@@ -19,6 +21,7 @@ export class AuthService {
     private readonly redisService: AuthRedisService,
     private readonly mariaDbService: MariaDbService,
     private readonly jwtService: JwtService,
+    private readonly configService : ConfigService
   ) {}
 
   /**
@@ -168,46 +171,90 @@ export class AuthService {
     };
   }
 
+  async sendVerificacionCode(email: string): Promise<void> {
+    const resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
+
+    // Generar un código de 6 dígitos
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Guardar en Redis con 5 min de TTL
+    await this.redisService.saveVerificationCode(email, code);
+
+    // Enviar email
+    const { error } = await resend.emails.send({
+      from: 'Imox Cloud <onboarding@resend.dev>', 
+      to: email,
+      subject: 'Código de verificación - IMOX Cloud',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <h2 style="color: #333; text-align: center;">Restablecer contraseña</h2>
+          <p style="font-size: 16px; color: #555;">Tu código de verificación para restablecer tu contraseña en IMOX Cloud es:</p>
+          <div style="font-size: 32px; font-weight: bold; color: #007bff; text-align: center; margin: 20px 0; letter-spacing: 5px;">
+            ${code}
+          </div>
+          <p style="font-size: 14px; color: #888; text-align: center;">Este código expirará en 5 minutos.</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      this.logger.error(
+        `Error al enviar el email de verificación: ${error.message}`,
+      );
+      throw new Error('No se pudo enviar el código de verificación');
+    }
+  }
+
   /**
-   * Restablece la contraseña de un usuario usando la MAC de su IoT.
-   *
-   * Caso normal : el IoT ya está vinculado al usuario   → resetea.
-   * Caso A      : el IoT no tiene dueño                → vincula al usuario y resetea.
-   * Rechazado   : IoT de otro usuario o no encontrado.
-   *
-   * @param resetPasswordDto - DTO con userId, macAddress y nueva contraseña
+   * Verifica el código enviado por email
+   * @param email
+   * @param code
+   */
+  async verifyCode(email: string, code: string): Promise<void> {
+    const savedCode = await this.redisService.getVerificationCode(email);
+
+    if (!savedCode || savedCode !== code) {
+      throw new UnauthorizedException(
+        'Código de verificación inválido',
+      );
+    }
+
+  }
+
+  /**
+   * Restablece la contraseña de un usuario usando el código de verificación enviado por email.
+   * @param resetPasswordDto - DTO con email, code y nueva contraseña
    * @returns Promise<void>
    */
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
-    const { newPassword, userId, macAddress } = resetPasswordDto;
+    const { email, code, newPassword } = resetPasswordDto;
 
-    // 1. Buscar el IoT por MAC (lookup rápido por índice único)
-    const device = await this.mariaDbService.iot.findUnique({
-      where: { mac_address: macAddress },
+    // 1. Validar el código nuevamente por seguridad
+    const savedCode = await this.redisService.getVerificationCode(email);
+    if (!savedCode || savedCode !== code) {
+      throw new UnauthorizedException(
+        'Código de verificación inválido o expirado',
+      );
+    }
+
+    // 2. Buscar al usuario
+    const user = await this.mariaDbService.users.findUnique({
+      where: { email, status: 1 },
     });
-
-    if (!device) {
-      throw new UnauthorizedException('Credenciales inválidas.');
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
     }
 
-    // 2. Verificar propiedad del IoT
-    //    - Sin dueño       → Caso A: se vincula al usuario
-    //    - Mismo usuario   → caso normal
-    //    - Otro usuario    → rechazado (no se puede usar el IoT ajeno)
-    if (device.user_id == null) {
-      await this.mariaDbService.iot.update({
-        where: { mac_address: macAddress },
-        data: { user_id: userId },
-      });
-    } else if (device.user_id !== userId) {
-      throw new UnauthorizedException('Credenciales inválidas.');
-    }
-
-    // 3. Resetear la contraseña
+    // 3. Hashear y actualizar la contraseña
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     await this.mariaDbService.users.update({
-      where: { id: userId },
+      where: { id: user.id },
       data: { password: hashedNewPassword },
     });
+
+    // 4. Invalidar el código en Redis (ya fue usado)
+    await this.redisService.deleteVerificationCode(email);
+
+    this.logger.log(`Contraseña restablecida exitosamente para: ${email}`);
   }
 }

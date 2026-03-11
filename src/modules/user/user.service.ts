@@ -7,11 +7,12 @@ import { RegisterUserDto, ResponseGetProfileDto } from './dto/user.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
 import { MariaDbService } from '../database/mariadb.service';
 import { plainToInstance } from 'class-transformer';
+import { IotService } from "../iot/iot.service";
 import { hash } from 'bcrypt';
 
 @Injectable()
 export class UserService {
-  constructor(private readonly mariaDbService: MariaDbService) {}
+  constructor(private readonly mariaDbService: MariaDbService, private readonly iotService : IotService) {}
 
   /**
    * Registrar un nuevo usuario
@@ -57,5 +58,33 @@ export class UserService {
       throw new BadRequestException('Usuario no encontrado');
     }
     return plainToInstance(ResponseGetProfileDto, userFound);
+  }
+
+  /**
+   * Eliminar cuenta de usuario
+   * @param idUser 
+   * @returns Promise<void>
+   */
+  async deleteAccount(idUser: number): Promise<void> {
+    const user = await this.mariaDbService.users.findUnique({
+      where: { id: idUser },
+    });
+
+    // Validar si el usuario existe
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado');
+    }
+
+    const iotDevices = await this.mariaDbService.iot.findMany({
+      where: { user_id: idUser },
+    });
+
+    // Eliminar telemetría en paralelo
+    await Promise.all(
+      iotDevices.map((iot) => this.iotService.deleteTelemetryData(iot.id)),
+    );
+
+    // Eliminar el usuario en MariaDB
+    await this.mariaDbService.users.delete({ where: { id: idUser } });
   }
 }
