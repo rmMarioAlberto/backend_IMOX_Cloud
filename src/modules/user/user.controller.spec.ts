@@ -1,52 +1,65 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
-import { RegisterUserDto } from './dto/user.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ResponseGetProfileDto } from './dto/user.dto';
 
-// Mock del decorador GetUser
-jest.mock('../../common/decorators/get-user.decorator', () => ({
-  GetUser: () => () => ({}),
-}));
-
-const mockUserService = {
-  register: jest.fn(),
-  getProfile: jest.fn(),
-  editProfile: jest.fn(),
-};
-
-describe('UserController - Register', () => {
+describe('UserController', () => {
   let controller: UserController;
+  let userService: UserService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UserController],
-      providers: [{ provide: UserService, useValue: mockUserService }],
-    })
-      .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
-      .compile();
+      providers: [
+        {
+          provide: UserService,
+          useValue: {
+            register: jest.fn().mockResolvedValue(undefined),
+            getProfile: jest.fn().mockResolvedValue({
+              id: 1,
+              name: 'Test',
+              email: 'test@t.com',
+              role: 1,
+            } as ResponseGetProfileDto),
+            deleteAccount: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+      ],
+    }).compile();
 
     controller = module.get<UserController>(UserController);
-    jest.clearAllMocks();
+    userService = module.get<UserService>(UserService);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
   });
 
   describe('register', () => {
-    it('should call service and return created user', async () => {
-      const dto: RegisterUserDto = {
-        name: 'Test User',
-        email: 'test@imox.cloud',
-        password: 'password123',
-      };
+    it('should call userService.register and return success message', async () => {
+      const res = await controller.register({
+        name: 'Test',
+        email: 'test@test.com',
+        password: '123',
+      });
+      expect(userService.register).toHaveBeenCalled();
+      expect(res.message).toBe('Usuario registrado exitosamente');
+    });
+  });
 
-      const result = {
-        id: 1,
-      };
+  describe('getProfile', () => {
+    it('should return mapped profile data', async () => {
+      const res = await controller.getProfile({ id: 1 } as any);
+      expect(userService.getProfile).toHaveBeenCalled();
+      expect(res.name).toBe('Test');
+    });
+  });
 
-      mockUserService.register.mockResolvedValue(result);
-
-      expect(await controller.register(dto)).toBe(result);
-      expect(mockUserService.register).toHaveBeenCalledWith(dto);
+  describe('deleteAccount', () => {
+    it('should call userService.deleteAccount and return message', async () => {
+      const res = await controller.deleteAccount({ id: 1 } as any);
+      expect(userService.deleteAccount).toHaveBeenCalledWith(1);
+      expect(res.message).toBe('Cuenta eliminada exitosamente');
     });
   });
 });

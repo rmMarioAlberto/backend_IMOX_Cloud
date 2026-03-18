@@ -5,7 +5,6 @@ import {
   MinLength,
   IsEmail,
   IsOptional,
-  IsNumber,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Exclude, Expose } from 'class-transformer';

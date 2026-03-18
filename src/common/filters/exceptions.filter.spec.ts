@@ -191,5 +191,17 @@ describe('AllExceptionsFilter', () => {
         }),
       );
     });
+
+    it('should handle ECONNREFUSED connection errors', () => {
+      const exception = new Error('ECONNREFUSED connection closed');
+      filter.catch(exception, mockArgumentsHost);
+
+      expect(mockStatus).toHaveBeenCalledWith(HttpStatus.SERVICE_UNAVAILABLE);
+      expect(mockJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          errorCode: 'SERVICE_UNAVAILABLE',
+        }),
+      );
+    });
   });
 });

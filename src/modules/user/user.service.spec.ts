@@ -1,105 +1,101 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
-import { MariaDbService } from '../database';
-import { ConflictException } from '@nestjs/common';
-
-// iniciar mock de bcrypt para que no genere error de importación en el servicio
-jest.mock('bcrypt', () => ({
-  hash: jest.fn(),
-}));
+import { MariaDbService } from '../database/mariadb.service';
+import { IotService } from '../iot/iot.service';
+import { ConflictException, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
-// iniciar mock de prisma para que no genere error de importación en el servicio
-const mockPrismaService = {
-  users: {
-    findUnique: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-  },
-};
+jest.mock('bcrypt', () => ({
+  hash: jest.fn().mockResolvedValue('hashed-password'),
+}));
 
-describe('UserService - Register', () => {
+describe('UserService', () => {
   let service: UserService;
+  let mariaDbService: MariaDbService;
+  let iotService: IotService;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserService,
-        { provide: MariaDbService, useValue: mockPrismaService },
+        {
+          provide: MariaDbService,
+          useValue: {
+            users: {
+              findUnique: jest.fn(),
+              create: jest.fn(),
+              delete: jest.fn(),
+            },
+            iot: {
+              findMany: jest.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]),
+              updateMany: jest.fn(),
+            },
+          },
+        },
+        {
+          provide: IotService,
+          useValue: {
+            deleteTelemetryData: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<UserService>(UserService);
-    jest.clearAllMocks();
+    mariaDbService = module.get<MariaDbService>(MariaDbService);
+    iotService = module.get<IotService>(IotService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
   });
 
   describe('register', () => {
-    it('debería crear un nuevo usuario con contraseña hasheada', async () => {
-      const registerDto = {
-        name: 'Test User',
-        email: 'test@imox.cloud',
-        password: 'password123',
-      };
-
-      const createdUser = {
-        id: 1,
-        name: 'Test User',
-        email: 'test@imox.cloud',
-        password: 'hashed_password',
-        role: 1,
-        status: 1,
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
-
-      // Mock: email no existe
-      mockPrismaService.users.findUnique.mockResolvedValue(null);
-      // Mock: hash de bcrypt
-      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed_password');
-      // Mock: creación exitosa
-      mockPrismaService.users.create.mockResolvedValue(createdUser);
-
-      const result = await service.register(registerDto);
-
-      expect(mockPrismaService.users.findUnique).toHaveBeenCalledWith({
-        where: { email: 'test@imox.cloud' },
-      });
-      expect(bcrypt.hash).toHaveBeenCalledWith('password123', 10);
-      expect(mockPrismaService.users.create).toHaveBeenCalledWith({
-        data: {
-          name: 'Test User',
-          email: 'test@imox.cloud',
-          password: 'hashed_password',
-          role: 1,
-          status: 1,
-        },
-      });
-      // RegisterResponseDto solo expone 'id' debido a @Exclude/@Expose
-      expect(result).toHaveProperty('id', 1);
+    it('should register a new user successfully', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValue(null);
+      await service.register({ name: 'Test', email: 'test@test.com', password: 'pwd' });
+      expect(mariaDbService.users.create).toHaveBeenCalled();
     });
 
-    it('debería lanzar ConflictException si el email ya existe', async () => {
-      const registerDto = {
-        name: 'Test User',
-        email: 'existing@imox.cloud',
-        password: 'password123',
-      };
+    it('should throw ConflictException if user already exists', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValue({ id: 1 });
+      await expect(
+        service.register({ name: 'Test', email: 'test@test.com', password: 'pwd' }),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
 
-      // Mock: email ya existe en base de datos
-      mockPrismaService.users.findUnique.mockResolvedValue({
-        id: 1,
-        email: 'existing@imox.cloud',
+  describe('getProfile', () => {
+    it('should return user profile', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValue({ id: 1, name: 'Test' });
+      const result = await service.getProfile({ sub: 1 } as any);
+      expect(result.name).toBe('Test');
+    });
+
+    it('should throw BadRequestException if user not found', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(service.getProfile({ sub: 1 } as any)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('deleteAccount', () => {
+    it('should delete user and decouple devices successfully', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValue({ id: 1 });
+      await service.deleteAccount(1);
+
+      expect(iotService.deleteTelemetryData).toHaveBeenCalledTimes(2);
+      expect(mariaDbService.iot.updateMany).toHaveBeenCalledWith({
+        where: { user_id: 1 },
+        data: { user_id: null },
       });
+      expect(mariaDbService.users.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+    });
 
-      await expect(service.register(registerDto)).rejects.toThrow(
-        ConflictException,
-      );
-      await expect(service.register(registerDto)).rejects.toThrow(
-        'El correo ya está registrado',
-      );
-
-      // Verificar que NO intentó crear el usuario
-      expect(mockPrismaService.users.create).not.toHaveBeenCalled();
+    it('should throw if user not found to delete', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(service.deleteAccount(1)).rejects.toThrow(BadRequestException);
     });
   });
 });

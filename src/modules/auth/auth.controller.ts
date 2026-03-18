@@ -27,7 +27,7 @@ import {
 } from './dto/auth.dto';
 import type { Request, Response } from 'express';
 import { plainToInstance } from 'class-transformer';
-import { Public } from 'src/common/decorators/public.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')

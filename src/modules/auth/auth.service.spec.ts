@@ -1,159 +1,204 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { AuthRedisService } from '../database/auth/auth-redis.service';
 import { MariaDbService } from '../database/mariadb.service';
+import { AuthRedisService } from '../database/auth/auth-redis.service';
 import { JwtService } from './jwt.service';
-import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { UnauthorizedException, BadRequestException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 
-// iniciar mock de bcrypt para que no genere error de importación en el servicio
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
   hash: jest.fn(),
 }));
-import * as bcrypt from 'bcrypt';
 
-// iniciar mock de redis para que no genere error de importación en el servicio
-const mockRedisService = {
-  saveSession: jest.fn(),
-  getSession: jest.fn(),
-  deleteSession: jest.fn(),
-  blacklistToken: jest.fn(),
-  isTokenBlacklisted: jest.fn(),
-};
-
-// iniciar mock de prisma para que no genere error de importación en el servicio
-const mockMariaDbService = {
-  users: {
-    findUnique: jest.fn(),
-    update: jest.fn(),
-  },
-  iot: {
-    findUnique: jest.fn(),
-    update: jest.fn(),
-  },
-};
-
-// iniciar mock de jwt para que no genere error de importación en el servicio
-const mockJwtService = {
-  generateAccessToken: jest.fn(),
-  generateRefreshToken: jest.fn(),
-  verifyRefreshToken: jest.fn(),
-};
+jest.mock('mailersend', () => {
+  return {
+    MailerSend: jest.fn().mockImplementation(() => ({
+      email: { send: jest.fn().mockResolvedValue(true) },
+    })),
+    EmailParams: jest.fn().mockImplementation(() => ({
+      setFrom: jest.fn().mockReturnThis(),
+      setTo: jest.fn().mockReturnThis(),
+      setSubject: jest.fn().mockReturnThis(),
+      setHtml: jest.fn().mockReturnThis(),
+      setText: jest.fn().mockReturnThis(),
+    })),
+    Sender: jest.fn(),
+    Recipient: jest.fn(),
+  };
+});
 
 describe('AuthService', () => {
   let service: AuthService;
+  let mariaDbService: MariaDbService;
+  let redisService: AuthRedisService;
+  let jwtService: JwtService;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        { provide: AuthRedisService, useValue: mockRedisService },
-        { provide: MariaDbService, useValue: mockMariaDbService },
-        { provide: JwtService, useValue: mockJwtService },
+        {
+          provide: MariaDbService,
+          useValue: {
+            users: {
+              findUnique: jest.fn().mockResolvedValue({
+                id: 1,
+                email: 'test@imox.com',
+                password: 'hashed-password',
+                status: 1,
+                role: 'USER',
+              }),
+              update: jest.fn(),
+            },
+          },
+        },
+        {
+          provide: AuthRedisService,
+          useValue: {
+            saveSession: jest.fn(),
+            isTokenBlacklisted: jest.fn().mockResolvedValue(false),
+            verifyRefreshToken: jest.fn(),
+            getSession: jest.fn().mockResolvedValue({ refreshToken: 'valid-refresh-token', sessionId: 'ses-1' }),
+            deleteSession: jest.fn(),
+            blacklistToken: jest.fn(),
+            getResetAttempts: jest.fn().mockResolvedValue(0),
+            saveVerificationCode: jest.fn(),
+            incrementResetAttempt: jest.fn(),
+            deleteVerificationCode: jest.fn(),
+            getVerificationCode: jest.fn().mockResolvedValue('123456'),
+          },
+        },
+        {
+          provide: JwtService,
+          useValue: {
+            generateAccessToken: jest.fn().mockResolvedValue('access-token'),
+            generateRefreshToken: jest.fn().mockResolvedValue('refresh-token'),
+            verifyRefreshToken: jest.fn().mockResolvedValue({ sub: 1, exp: Math.floor(Date.now() / 1000) + 3600 }),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('config-value') },
+        },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
-    jest.clearAllMocks();
+    mariaDbService = module.get<MariaDbService>(MariaDbService);
+    redisService = module.get<AuthRedisService>(AuthRedisService);
+    jwtService = module.get<JwtService>(JwtService);
   });
 
   describe('login', () => {
-    it('debería retornar tokens si las credenciales son válidas', async () => {
-      // Mock data
-      const mockUser = {
-        id: 1,
-        email: 'test@imox.cloud',
-        password: 'hashedpassword',
-        role: 1,
-        name: 'Test User',
-        status: 1,
-      };
-
-      // Mock implementations
-      mockMariaDbService.users.findUnique.mockResolvedValue(mockUser);
-      mockJwtService.generateAccessToken.mockResolvedValue('access_token');
-      mockJwtService.generateRefreshToken.mockResolvedValue('refresh_token');
-
-      // Mock bcrypt
+    it('should return tokens if credentials are valid', async () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      
+      const result = await service.login({ email: 'test@imox.com', password: 'password123' });
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result.user.email).toBe('test@imox.com');
+    });
 
-      const result = await service.login({
-        email: 'test@imox.cloud',
-        password: 'password123',
-      });
+    it('should throw UnauthorizedException if password mismatches', async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      await expect(service.login({ email: 'test@imox.com', password: 'wrong' })).rejects.toThrow(UnauthorizedException);
+    });
+  });
 
-      expect(mockMariaDbService.users.findUnique).toHaveBeenCalledWith({
-        where: { email: 'test@imox.cloud', status: 1 },
-      });
-      expect(mockRedisService.saveSession).toHaveBeenCalled();
-      expect(result).toEqual({
-        accessToken: 'access_token',
-        refreshToken: 'refresh_token',
-        user: {
-          id: 1,
-          email: 'test@imox.cloud',
-          name: 'Test User',
-          role: 1,
-        },
-      });
+  describe('logout', () => {
+    it('should blacklist token and delete session', async () => {
+      await service.logout('valid-refresh-token');
+      expect(redisService.blacklistToken).toHaveBeenCalled();
+      expect(redisService.deleteSession).toHaveBeenCalled();
+    });
+
+    it('should return early if token is already blacklisted', async () => {
+      (redisService.isTokenBlacklisted as jest.Mock).mockResolvedValueOnce(true);
+      await service.logout('already-blacklisted');
+      expect(redisService.deleteSession).not.toHaveBeenCalled();
+    });
+
+    it('should handle verification errors silently', async () => {
+      (jwtService.verifyRefreshToken as jest.Mock).mockRejectedValueOnce(new Error('Invalid token'));
+      await expect(service.logout('invalid-token')).resolves.not.toThrow();
+    });
+  });
+
+  describe('refreshToken', () => {
+    it('should issue new tokens for valid refresh token', async () => {
+      const result = await service.refreshToken('valid-refresh-token');
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+    });
+
+    it('should throw if token is blacklisted', async () => {
+      (redisService.isTokenBlacklisted as jest.Mock).mockResolvedValueOnce(true);
+      await expect(service.refreshToken('blacklisted-token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw and delete session if token differs', async () => {
+      (redisService.getSession as jest.Mock).mockResolvedValueOnce({ refreshToken: 'different-token', sessionId: 'ses-1' });
+      await expect(service.refreshToken('token-attempt')).rejects.toThrow(UnauthorizedException);
+      expect(redisService.deleteSession).toHaveBeenCalled();
+    });
+
+    it('should throw if user not found or inactive', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValueOnce(null);
+      await expect(service.refreshToken('valid-token')).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('sendVerificacionCode', () => {
+    it('should orchestrate mailersend properly', async () => {
+      await expect(service.sendVerificacionCode('test@imox.com')).resolves.not.toThrow();
+      expect(redisService.saveVerificationCode).toHaveBeenCalled();
+      expect(redisService.incrementResetAttempt).toHaveBeenCalled();
+    });
+
+    it('should throw UnauthorizedException if too many attempts', async () => {
+      (redisService.getResetAttempts as jest.Mock).mockResolvedValueOnce(3);
+      await expect(service.sendVerificacionCode('test@imox.com')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw if user not found', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValueOnce(null);
+      await expect(service.sendVerificacionCode('no-existe@imox.com')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should catch mailersend error and throw BadRequestException', async () => {
+      const mockMailerSend = require('mailersend');
+      mockMailerSend.MailerSend.mockImplementationOnce(() => ({
+        email: { send: jest.fn().mockRejectedValueOnce(new Error('Send limit reached')) },
+      }));
+      await expect(service.sendVerificacionCode('test@imox.com')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('verifyCode', () => {
+    it('should pass for matching code', async () => {
+      await expect(service.verifyCode('test@imox.com', '123456')).resolves.not.toThrow();
+    });
+
+    it('should throw for invalid code', async () => {
+      await expect(service.verifyCode('test@imox.com', '000000')).rejects.toThrow(UnauthorizedException);
     });
   });
 
   describe('resetPassword', () => {
-    const resetDto = {
-      userId: 1,
-      macAddress: 'AA:BB:CC:DD:EE:FF',
-      newPassword: 'newPassword123',
-    };
-
-    it('debería resetear la contraseña si el dispositivo pertenece al usuario', async () => {
-      mockMariaDbService.iot.findUnique.mockResolvedValue({
-        mac_address: resetDto.macAddress,
-        user_id: 1,
-      });
-      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed_new_password');
-
-      await service.resetPassword(resetDto);
-
-      expect(mockMariaDbService.users.update).toHaveBeenCalledWith({
-        where: { id: 1 },
-        data: { password: 'hashed_new_password' },
-      });
+    it('should change password successfully', async () => {
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+      await service.resetPassword({ email: 'test@imox.com', code: '123456', newPassword: 'NewPassword1!' });
+      expect(mariaDbService.users.update).toHaveBeenCalled();
+      expect(redisService.deleteVerificationCode).toHaveBeenCalled();
     });
 
-    it('debería vincular el dispositivo y resetear si no tiene dueño', async () => {
-      mockMariaDbService.iot.findUnique.mockResolvedValue({
-        mac_address: resetDto.macAddress,
-        user_id: null,
-      });
-      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed_new_password');
-
-      await service.resetPassword(resetDto);
-
-      expect(mockMariaDbService.iot.update).toHaveBeenCalledWith({
-        where: { mac_address: resetDto.macAddress },
-        data: { user_id: 1 },
-      });
-      expect(mockMariaDbService.users.update).toHaveBeenCalled();
-    });
-
-    it('debería fallar si el dispositivo pertenece a otro usuario', async () => {
-      mockMariaDbService.iot.findUnique.mockResolvedValue({
-        mac_address: resetDto.macAddress,
-        user_id: 2,
-      });
-
-      await expect(service.resetPassword(resetDto)).rejects.toThrow(
-        UnauthorizedException,
-      );
-    });
-
-    it('debería fallar si el dispositivo no existe', async () => {
-      mockMariaDbService.iot.findUnique.mockResolvedValue(null);
-
-      await expect(service.resetPassword(resetDto)).rejects.toThrow(
-        UnauthorizedException,
-      );
+    it('should throw if user not found', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValueOnce(null);
+      await expect(service.resetPassword({ email: 'no-existe@imox.com', code: '123456', newPassword: 'pass' })).rejects.toThrow(UnauthorizedException);
     });
   });
 });

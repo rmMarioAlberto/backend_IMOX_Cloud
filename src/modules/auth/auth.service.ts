@@ -195,8 +195,8 @@ export class AuthService {
       apiKey: this.configService.get<string>('MAILERSEND_API_KEY') || '',
     });
 
-    // Generar un código de 6 dígitos
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generar un código de 6 dígitos (criptográficamente seguro)
+    const code = crypto.randomInt(100000, 999999).toString();
 
     // Guardar en Redis con 5 min de TTL
     await this.redisService.saveVerificationCode(email, code);

@@ -86,7 +86,7 @@ export class SpikeDetectorService {
     const voltageChange = calculateChange(
       currentElectrical.voltaje_v,
       baselineElectrical.voltaje_v,
-      5.0, // Deadband: 5 Volts
+      5, // Deadband: 5 Volts
     );
 
     const currentChange = calculateChange(
@@ -98,7 +98,7 @@ export class SpikeDetectorService {
     const powerChange = calculateChange(
       currentElectrical.potencia_w,
       baselineElectrical.potencia_w,
-      50.0, // Deadband: 50 Watts
+      50, // Deadband: 50 Watts
     );
 
     if (

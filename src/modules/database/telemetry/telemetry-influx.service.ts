@@ -73,7 +73,6 @@ export class TelemetryInfluxService {
     stop: string = 'now()',
   ): Promise<any[]> {
     try {
-      const queryApi = this.influxDbService.getQueryApi();
       const bucket = this.influxDbService.getBucket();
 
       const query = `
@@ -84,21 +83,7 @@ export class TelemetryInfluxService {
           |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
       `;
 
-      const results: any[] = [];
-      return new Promise((resolve, reject) => {
-        queryApi.queryRows(query, {
-          next(row, tableMeta) {
-            const o = tableMeta.toObject(row);
-            results.push(o);
-          },
-          error(error) {
-            reject(error);
-          },
-          complete() {
-            resolve(results);
-          },
-        });
-      });
+      return await this.executeQuery(query);
     } catch (error) {
       this.logger.error(
         `Error consultando telemetría para iotId ${iotId}`,
@@ -122,7 +107,6 @@ export class TelemetryInfluxService {
     window: string = '1h',
   ): Promise<any[]> {
     try {
-      const queryApi = this.influxDbService.getQueryApi();
       const bucket = this.influxDbService.getBucket();
 
       const query = `
@@ -134,21 +118,7 @@ export class TelemetryInfluxService {
           |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
       `;
 
-      const results: any[] = [];
-      return new Promise((resolve, reject) => {
-        queryApi.queryRows(query, {
-          next(row, tableMeta) {
-            const o = tableMeta.toObject(row);
-            results.push(o);
-          },
-          error(error) {
-            reject(error);
-          },
-          complete() {
-            resolve(results);
-          },
-        });
-      });
+      return await this.executeQuery(query);
     } catch (error) {
       this.logger.error(
         `Error consultando telemetría agrupada para iotId ${iotId}`,
@@ -170,7 +140,6 @@ export class TelemetryInfluxService {
     stop: string = 'now()',
   ): Promise<any[]> {
     try {
-      const queryApi = this.influxDbService.getQueryApi();
       const bucket = this.influxDbService.getBucket();
 
       const query = `
@@ -182,21 +151,7 @@ export class TelemetryInfluxService {
           |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
       `;
 
-      const results: any[] = [];
-      return new Promise((resolve, reject) => {
-        queryApi.queryRows(query, {
-          next(row, tableMeta) {
-            const o = tableMeta.toObject(row);
-            results.push(o);
-          },
-          error(error) {
-            reject(error);
-          },
-          complete() {
-            resolve(results);
-          },
-        });
-      });
+      return await this.executeQuery(query);
     } catch (error) {
       this.logger.error(
         `Error consultando anomalías de telemetría para iotId ${iotId}`,
@@ -213,7 +168,6 @@ export class TelemetryInfluxService {
    */
   async queryLatestTelemetry(iotId: number): Promise<any> {
     try {
-      const queryApi = this.influxDbService.getQueryApi();
       const bucket = this.influxDbService.getBucket();
 
       // |> last() filtra del lado de InfluxDB → devuelve solo 1 fila por campo
@@ -226,20 +180,8 @@ export class TelemetryInfluxService {
           |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
       `;
 
-      const results: any[] = [];
-      return new Promise((resolve, reject) => {
-        queryApi.queryRows(query, {
-          next(row, tableMeta) {
-            results.push(tableMeta.toObject(row));
-          },
-          error(error) {
-            reject(error);
-          },
-          complete() {
-            resolve(results.at(-1) ?? null);
-          },
-        });
-      });
+      const results = await this.executeQuery(query);
+      return results.at(-1) ?? null;
     } catch (error) {
       this.logger.error(
         `Error consultando última telemetría para iotId ${iotId}`,
@@ -247,6 +189,31 @@ export class TelemetryInfluxService {
       );
       return null;
     }
+  }
+
+  /**
+   * Ejecuta una consulta Flux en InfluxDB y devuelve los resultados en un arreglo.
+   * Centraliza la lógica de ejecución para evitar duplicación de código.
+   * 
+   * @param query Cadena de texto con la consulta en lenguaje Flux a ejecutar.
+   * @returns Promesa que resuelve en un arreglo de objetos con los resultados estructurados.
+   */
+  private executeQuery(query: string): Promise<any[]> {
+    const queryApi = this.influxDbService.getQueryApi();
+    const results: any[] = [];
+    return new Promise((resolve, reject) => {
+      queryApi.queryRows(query, {
+        next(row, tableMeta) {
+          results.push(tableMeta.toObject(row));
+        },
+        error(error) {
+          reject(error);
+        },
+        complete() {
+          resolve(results);
+        },
+      });
+    });
   }
 
   /**

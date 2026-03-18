@@ -11,6 +11,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { MqttTelemetryDto, MqttHistoryRequestDto } from './dto/mqtt.dto';
 import { toTelemetryResponse } from '../telemetry/utils/telemetry.mapper';
+import { DeadbandUtil } from '../telemetry/utils/deadband.util';
 
 @Injectable()
 export class MqttService implements OnModuleInit {
@@ -220,18 +221,7 @@ export class MqttService implements OnModuleInit {
       const stopIso = stopD.toISOString();
 
       // Determinar ventana de agregación según el rango solicitado (igual que en IotService)
-      const diffMs = stopD.getTime() - startD.getTime();
-      const diffHours = diffMs / (1000 * 60 * 60);
-      const diffDays = diffHours / 24;
-
-      let window = '5m';
-      if (diffDays > 7) {
-        window = '6h';
-      } else if (diffDays > 2) {
-        window = '1h';
-      } else if (diffHours > 12) {
-        window = '15m';
-      }
+      const window = DeadbandUtil.calculateAggregationWindow(startD, stopD);
 
       const [aggregatedResults, anomalyResults] = await Promise.all([
         this.influxService.queryAggregatedTelemetry(
@@ -261,7 +251,7 @@ export class MqttService implements OnModuleInit {
         (a, b) => new Date(a._time).getTime() - new Date(b._time).getTime(),
       );
 
-      const data = this.applyDeadband(combined, window);
+      const data = DeadbandUtil.applyDeadband(combined, window);
 
       this.logger.debug(
         `Historial para dispositivo ${iotId}: ${data.length} puntos (ventana: ${window})`,
@@ -290,126 +280,7 @@ export class MqttService implements OnModuleInit {
     });
   }
 
-  /**
-   * @description Convierte una fila de InfluxDB a un punto de gráfica
-   */
-  private toDataPoint(r: any): any[] {
-    return [
-      r._time,
-      Number((r.voltaje_v ?? 0).toFixed(2)),
-      Number((r.corriente_a ?? 0).toFixed(2)),
-      Number((r.potencia_w ?? 0).toFixed(2)),
-      Number((r.energia_kwh ?? 0).toFixed(2)),
-      r.anomaly_type || 'NONE',
-    ];
-  }
 
-  /**
-   * Aplica un filtro de suavizado (deadband) a la serie de telemetría para optimizar almacenamiento.
-   *
-   * @param combined Datos combinados de telemetría
-   * @param window Ventana de agregación utilizada
-   */
-  private applyDeadband(combined: any[], window: string): any[][] {
-    const data: any[][] = [];
-    let lastSavedPoint: any[] | null = null;
-
-    for (let i = 0; i < combined.length; i++) {
-      const r = combined[i];
-      if (r.voltaje_v === undefined && r.corriente_a === undefined) continue;
-
-      const anomaly: string = r.anomaly_type || 'NONE';
-      const currentPoint = this.toDataPoint(r);
-
-      // Siempre incluir anomalías y puntos extremos de la serie
-      if (this.isEssentialPoint(anomaly, i, combined.length)) {
-        data.push(currentPoint);
-        lastSavedPoint = currentPoint;
-        continue;
-      }
-
-      const inclusion = this.evaluatePointInclusion(
-        currentPoint,
-        lastSavedPoint,
-        window,
-        combined[i - 1],
-      );
-
-      if (inclusion.shouldInclude) {
-        if (inclusion.prevPoint) data.push(inclusion.prevPoint);
-        data.push(currentPoint);
-        lastSavedPoint = currentPoint;
-      }
-    }
-
-    return data;
-  }
-
-  /**
-   * Determina si un punto es esencial (anomalía o extremo).
-   *
-   * @param anomaly Tipo de anomalía
-   * @param index Índice actual
-   * @param total Total de puntos
-   */
-  private isEssentialPoint(
-    anomaly: string,
-    index: number,
-    total: number,
-  ): boolean {
-    return anomaly !== 'NONE' || index === 0 || index === total - 1;
-  }
-
-  /**
-   * Evalúa si un punto debe ser incluido basado en la ventana y fluctuaciones.
-   *
-   * @param current Punto actual
-   * @param last Último punto guardado
-   * @param window Ventana de agregación
-   * @param prevRaw Punto anterior sin procesar
-   */
-  private evaluatePointInclusion(
-    current: any[],
-    last: any[] | null,
-    window: string,
-    prevRaw: any,
-  ): { shouldInclude: boolean; prevPoint?: any[] } {
-    if (!last) return { shouldInclude: true };
-
-    if (window === '5m' || window === '15m') {
-      if (this.checkFluctuation(current, last)) {
-        const prevPoint =
-          prevRaw && last[0] !== prevRaw._time
-            ? this.toDataPoint(prevRaw)
-            : undefined;
-        return { shouldInclude: true, prevPoint };
-      }
-      return { shouldInclude: false };
-    }
-
-    return { shouldInclude: last[0] !== current[0] };
-  }
-
-  /**
-   * Verifica si existe un cambio significativo entre dos puntos de telemetría.
-   *
-   * @param current Punto actual
-   * @param last Último punto guardado
-   * @returns Verdadero si el cambio es significativo (Deadband)
-   */
-  private checkFluctuation(current: any[], last: any[]): boolean {
-    const vDiff = Math.abs((current[1] as number) - (last[1] as number));
-    const cDiff = Math.abs((current[2] as number) - (last[2] as number));
-    const pDiff = Math.abs((current[3] as number) - (last[3] as number));
-    const timeDiff =
-      new Date(current[0] as string).getTime() -
-      new Date(last[0] as string).getTime();
-
-    const isFluctuation = vDiff > 0.5 || cDiff > 0.1 || pDiff > 5;
-    const maxTimeExceeded = timeDiff > 1000 * 60 * 60; // 1 hora
-
-    return isFluctuation || maxTimeExceeded;
-  }
 
   /**
    * Extrae el ID del dispositivo IoT a partir del tópico MQTT.
