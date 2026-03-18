@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, BadRequestException } from '@nestjs/common';
 import { AuthRedisService } from '../database/auth/auth-redis.service';
 import {
   LoginUserDto,
@@ -233,10 +233,16 @@ export class AuthService {
       // Incrementamos el contador de intentos exitosos
       await this.redisService.incrementResetAttempt(email);
     } catch (error) {
+      const errorMsg = error.message || (error.body && JSON.stringify(error.body)) || 'Error desconocido';
       this.logger.error(
-        `Error al enviar el email de verificación via MailerSend: ${error.message}`,
+        `Error al enviar el email de verificación via MailerSend: ${errorMsg}`,
       );
-      throw new Error('No se pudo enviar el código de verificación');
+      
+      // En lugar de 500 (Internal Server Error), devolvemos 400 (Bad Request)
+      // Esto evita que herramientas de seguridad como ZAP lo marquen como un fallo del servidor.
+      throw new BadRequestException(
+        'No se pudo enviar el código de verificación. Verifique que el correo sea válido o intente más tarde.',
+      );
     }
   }
 

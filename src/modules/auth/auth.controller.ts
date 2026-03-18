@@ -31,7 +31,6 @@ import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
-@Public()
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -39,6 +38,7 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @Public() 
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Iniciar sesión (public)',
@@ -135,6 +135,7 @@ export class AuthController {
   }
 
   @Post('send-verification-code')
+  @Public() 
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Enviar código de verificación (public)',
@@ -153,6 +154,7 @@ export class AuthController {
   }
 
   @Post('verify-code')
+  @Public() 
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Verificar código (public)',
@@ -172,6 +174,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @Public() 
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Restablecer contraseña (public)',

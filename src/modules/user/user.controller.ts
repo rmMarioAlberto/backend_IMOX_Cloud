@@ -9,11 +9,12 @@ import {
 import { UserService } from './user.service';
 import { RegisterUserDto, ResponseGetProfileDto } from './dto/user.dto';
 import { UserPayloadDto } from '../auth/dto/auth.dto';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('User')
+@ApiBearerAuth()
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
