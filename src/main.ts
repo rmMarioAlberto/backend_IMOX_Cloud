@@ -6,11 +6,24 @@ import { globalValidationPipe } from './common/pipes/validation.pipe';
 import { corsConfig } from './config/cors.config';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
 import cookieParser from 'cookie-parser';
 import { getHelmetConfig } from './config/helmet.config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Asegurar que la carpeta de almacenamiento existe al arrancar
+  const uploadPath = join(__dirname, '..', 'uploads/ota');
+  if (!existsSync(uploadPath)) {
+    mkdirSync(uploadPath, { recursive: true });
+  }
+
+  app.useStaticAssets(uploadPath, {
+    prefix: '/ota/downloads/',
+  });
   app.use(cookieParser());
   const configService = app.get(ConfigService);
 

@@ -3,6 +3,14 @@ import { OtaService } from './ota.service';
 import { MariaDbService } from '../database/mariadb.service';
 import { MqttService } from '../mqtt/mqtt.service';
 import { BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as fs from 'node:fs';
+
+jest.mock('node:fs', () => ({
+  existsSync: jest.fn(),
+  mkdirSync: jest.fn(),
+  writeFileSync: jest.fn(),
+}));
 
 describe('OtaService', () => {
   let service: OtaService;
@@ -10,6 +18,7 @@ describe('OtaService', () => {
   let mqttService: MqttService;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OtaService,
@@ -29,6 +38,12 @@ describe('OtaService', () => {
           provide: MqttService,
           useValue: {
             publishOtaCommand: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
           },
         },
       ],
@@ -132,6 +147,31 @@ describe('OtaService', () => {
         orderBy: { created_at: 'desc' },
         select: expect.any(Object),
       });
+    });
+  });
+
+  describe('uploadFirmware', () => {
+    const mockFile = {
+      originalname: 'test.bin',
+      buffer: Buffer.from('test-content'),
+    } as any;
+
+    it('should save file and return hash and url', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      
+      const result = await service.uploadFirmware(mockFile);
+
+      expect(fs.mkdirSync).toHaveBeenCalled();
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      expect(result.hash).toBeDefined();
+      expect(result.url).toContain('https://dietpi.tail02564c.ts.net/ota/downloads/');
+      expect(result.fileName).toContain('test.bin');
+    });
+
+    it('should not recreate directory if it exists', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      await service.uploadFirmware(mockFile);
+      expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
   });
 });

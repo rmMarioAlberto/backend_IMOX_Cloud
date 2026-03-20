@@ -2,7 +2,10 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { MariaDbService } from '../database/mariadb.service';
 import { MqttService } from '../mqtt/mqtt.service';
 import { CreateOtaDto } from './dto/create-ota.dto';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class OtaService {
@@ -11,7 +14,43 @@ export class OtaService {
   constructor(
     private readonly prisma: MariaDbService,
     private readonly mqttService: MqttService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * @description Sube un archivo binario de firmware al servidor local.
+   * Calcula el hash SHA256 y genera la URL de descarga vía Tailscale Funnel.
+   */
+  async uploadFirmware(file: Express.Multer.File) {
+    const uploadDir = join(process.cwd(), 'uploads', 'ota');
+    if (!existsSync(uploadDir)) {
+      mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // Generar un nombre único para evitar colisiones
+    const fileName = `${Date.now()}-${file.originalname}`;
+    const filePath = join(uploadDir, fileName);
+
+    // Guardar el archivo
+    writeFileSync(filePath, file.buffer);
+
+    // Calcular el hash SHA256
+    const hash = createHash('sha256').update(file.buffer).digest('hex');
+
+    // Generar la URL (Usando el dominio de Tailscale Funnel proporcionado por el usuario)
+    // En el futuro esto podría venir del ConfigService si el dominio cambia.
+    const baseUrl = 'https://dietpi.tail02564c.ts.net';
+    const downloadUrl = `${baseUrl}/ota/downloads/${fileName}`;
+
+    this.logger.log(`Nuevo firmware subido: ${fileName}. Hash: ${hash}`);
+
+    return {
+      message: 'Archivo subido exitosamente',
+      fileName,
+      url: downloadUrl,
+      hash,
+    };
+  }
 
   /**
    * @description Crea y despacha una actualización OTA hacia uno o todos los dispositivos.

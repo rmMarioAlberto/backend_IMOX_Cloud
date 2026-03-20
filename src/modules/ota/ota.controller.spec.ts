@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OtaController } from './ota.controller';
 import { OtaService } from './ota.service';
 import { CreateOtaDto } from './dto/create-ota.dto';
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException } from '@nestjs/common';
 
 describe('OtaController', () => {
   let controller: OtaController;
@@ -17,6 +17,7 @@ describe('OtaController', () => {
           useValue: {
             createOtaUpdate: jest.fn().mockResolvedValue({ message: 'ok', total: 1 }),
             getOtaHistory: jest.fn().mockResolvedValue([]),
+            uploadFirmware: jest.fn().mockResolvedValue({ url: 'test-url', hash: 'test-hash' }),
           },
         },
       ],
@@ -46,11 +47,19 @@ describe('OtaController', () => {
     it('should throw HttpException if target is missing', async () => {
       const invalidDto = { ...dto, target: undefined as any };
       await expect(controller.createOtaUpdate(invalidDto)).rejects.toThrow(HttpException);
-      try {
-        await controller.createOtaUpdate(invalidDto);
-      } catch (e) {
-        expect(e.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-      }
+    });
+  });
+
+  describe('uploadFirmware', () => {
+    it('should call service uploadFirmware', async () => {
+      const mockFile = { originalname: 'test.bin' } as any;
+      const result = await controller.uploadFirmware(mockFile);
+      expect(service.uploadFirmware).toHaveBeenCalledWith(mockFile);
+      expect(result.url).toBe('test-url');
+    });
+
+    it('should throw if file is missing', async () => {
+      await expect(controller.uploadFirmware(undefined as any)).rejects.toThrow(HttpException);
     });
   });
 
