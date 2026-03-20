@@ -78,6 +78,7 @@ export class MqttService implements OnModuleInit {
   private subscribeToTopics() {
     const telemetryTopic = 'imox/devices/+/telemetry';
     const historyTopic = 'imox/devices/+/history/request';
+    const otaStatusTopic = 'imox/devices/+/ota/status';
 
     this.client.subscribe(telemetryTopic, (err) => {
       if (err) {
@@ -94,6 +95,14 @@ export class MqttService implements OnModuleInit {
         this.logger.log(`Suscrito a: ${historyTopic}`);
       }
     });
+
+    this.client.subscribe(otaStatusTopic, (err) => {
+      if (err) {
+        this.logger.error(`Error suscribiéndose a ${otaStatusTopic}:`, err);
+      } else {
+        this.logger.log(`Suscrito a: ${otaStatusTopic}`);
+      }
+    });
   }
 
   /**
@@ -104,6 +113,8 @@ export class MqttService implements OnModuleInit {
       await this.handleTelemetry(topic, payload);
     } else if (topic.endsWith('/history/request')) {
       await this.handleHistoryRequest(topic, payload);
+    } else if (topic.endsWith('/ota/status')) {
+      await this.handleOtaStatus(topic, payload);
     }
   }
 
@@ -280,6 +291,97 @@ export class MqttService implements OnModuleInit {
     });
   }
 
+  /**
+   * @description Publica el comando OTA en el tópico del dispositivo con retain:true.
+   * Esto garantiza que si el equipo está offline, recibirá el comando en cuanto se reconecte,
+   * incluso si el servidor fue reiniciado.
+   */
+  public publishOtaCommand(iotId: number, payload: object): void {
+    const topic = `imox/devices/${iotId}/ota/command`;
+    this.client.publish(
+      topic,
+      JSON.stringify(payload),
+      { qos: 1, retain: true },
+      (err) => {
+        if (err) {
+          this.logger.error(`Error publicando comando OTA en ${topic}:`, err);
+        } else {
+          this.logger.log(
+            `Comando OTA publicado y retenido en broker para dispositivo ${iotId}`,
+          );
+        }
+      },
+    );
+  }
+
+  /**
+   * @description Procesa los mensajes de estado OTA enviados por el dispositivo.
+   * Actualiza el registro en MySQL y, al recibir un estado final (COMPLETED/FAILED),
+   * limpia el mensaje retenido en el broker para evitar re-ejecuciones.
+   */
+  private async handleOtaStatus(topic: string, payload: Buffer) {
+    const iotId = this.extractIotIdFromTopic(topic);
+    try {
+      const rawData = JSON.parse(payload.toString()) as {
+        job_id?: string;
+        status?: string;
+        step?: string;
+        error?: string;
+      };
+
+      const { job_id, status, step, error } = rawData;
+
+      if (!job_id || !status) {
+        this.logger.warn(
+          `Mensaje OTA incompleto del dispositivo ${iotId}: ${payload.toString()}`,
+        );
+        return;
+      }
+
+      const stepInfo = step ? ` / ${step}` : '';
+      const errorInfo = error ? ` - Error: ${error}` : '';
+      this.logger.log(
+        `Status OTA dispositivo ${iotId} (Job: ${job_id}): ${status}${stepInfo}${errorInfo}`,
+      );
+
+      const otaRecord = await this.prismaMysql.ota_updates.findUnique({
+        where: { job_id },
+      });
+
+      if (!otaRecord) {
+        this.logger.warn(
+          `OTA Update con job_id "${job_id}" no existe en la base de datos.`,
+        );
+        return;
+      }
+
+      await this.prismaMysql.ota_updates.update({
+        where: { job_id },
+        data: {
+          status,
+          step: step ?? error ?? null,
+        },
+      });
+
+      // Si el proceso terminó de forma definitiva, limpiar el mensaje retenido del broker
+      // (publicar string vacío con retain:true borra el registro del broker)
+      if (status === 'COMPLETED' || status === 'FAILED') {
+        const commandTopic = `imox/devices/${iotId}/ota/command`;
+        this.client.publish(commandTopic, '', { qos: 1, retain: true }, (err) => {
+          if (!err) {
+            this.logger.log(
+              `Mensaje retenido OTA limpiado del broker para dispositivo ${iotId}`,
+            );
+          }
+        });
+      }
+    } catch (err) {
+      this.logger.error(
+        `Error procesando OTA status para dispositivo ${iotId}:`,
+        err,
+      );
+    }
+  }
 
 
   /**

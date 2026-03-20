@@ -23,7 +23,8 @@ model iot {
   updated_at      DateTime  @updatedAt @db.Timestamp(6)
 
   // Relaciones
-  user users? @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: Cascade, map: "fk_iot_user")
+  user        users?        @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: Cascade, map: "fk_iot_user")
+  ota_updates ota_updates[]
 
   @@index([user_id], map: "fk_iot_user_idx")
 }
@@ -38,4 +39,21 @@ model users {
   created_at DateTime @default(now()) @db.Timestamp(6)
   updated_at DateTime @updatedAt @db.Timestamp(6)
   iot        iot[]
+}
+
+model ota_updates {
+  id         Int      @id @default(autoincrement())
+  job_id     String   @unique(map: "job_id_UNIQUE") @db.VarChar(100)
+  version    String   @db.VarChar(50)
+  url        String   @db.VarChar(255)
+  hash       String?  @db.VarChar(100)
+  status     String   @default("PENDING") @db.VarChar(50) // PENDING, IN_PROGRESS, COMPLETED, FAILED
+  step       String?  @db.VarChar(100) // DOWNLOADING, INSTALLING, etc.
+  device_id  Int
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
+
+  iot iot @relation(fields: [device_id], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_ota_update_iot")
+
+  @@index([device_id], map: "fk_ota_update_iot_idx")
 }

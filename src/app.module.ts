@@ -7,6 +7,7 @@ import { DatabaseModule } from './modules/database/database.module';
 import { IotModule } from './modules/iot/iot.module';
 import { MqttModule } from './modules/mqtt/mqtt.module';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
+import { OtaModule } from './modules/ota/ota.module';
 import { AllExceptionsFilter } from './common/filters/exceptions.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -25,6 +26,7 @@ import { getThrottlerConfig } from './config/throttler.config';
     IotModule,
     MqttModule,
     TelemetryModule,
+    OtaModule,
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) =>

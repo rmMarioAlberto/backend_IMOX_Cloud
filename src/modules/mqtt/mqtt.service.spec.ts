@@ -52,6 +52,10 @@ describe('MqttService', () => {
               findUnique: jest.fn().mockResolvedValue({ id: 1, status: 1 }),
               update: jest.fn(),
             },
+            ota_updates: {
+              findUnique: jest.fn(),
+              update: jest.fn(),
+            },
           },
         },
         {
@@ -226,6 +230,59 @@ describe('MqttService', () => {
       influxService.queryAnomaliesRange.mockResolvedValueOnce([]);
       
       await (service as any).handleHistoryRequest('imox/devices/1/history/request', Buffer.from('{"startDate": "2023-01-01T00:00:00Z", "endDate": "2023-01-02T00:00:00Z"}'));
+    });
+
+    it('publishOtaCommand should publish with retain: true', async () => {
+      await service.onModuleInit();
+      const mockClient = (service as any).client;
+      service.publishOtaCommand(1, { job_id: 'test' });
+      expect(mockClient.publish).toHaveBeenCalledWith(
+        'imox/devices/1/ota/command',
+        JSON.stringify({ job_id: 'test' }),
+        { qos: 1, retain: true },
+        expect.any(Function),
+      );
+      
+      const publishCb = mockClient.publish.mock.calls.find(c => c[0] === 'imox/devices/1/ota/command')[3];
+      publishCb(new Error('err'));
+      publishCb(null);
+    });
+
+    it('handleOtaStatus should update DB and clean retained message if final', async () => {
+      await service.onModuleInit();
+      const topic = 'imox/devices/1/ota/status';
+      const payload = Buffer.from(JSON.stringify({ job_id: 'job1', status: 'COMPLETED', step: 'DONE' }));
+      
+      (mariaDb.ota_updates.findUnique as jest.Mock).mockResolvedValue({ job_id: 'job1' });
+
+      await (service as any).handleOtaStatus(topic, payload);
+
+      expect(mariaDb.ota_updates.update).toHaveBeenCalledWith({
+        where: { job_id: 'job1' },
+        data: { status: 'COMPLETED', step: 'DONE' },
+      });
+      const mockClient = (service as any).client;
+      expect(mockClient.publish).toHaveBeenCalledWith('imox/devices/1/ota/command', '', { qos: 1, retain: true }, expect.any(Function));
+
+      // Trigger the clean-up callback for coverage
+      const cleanUpCb = mockClient.publish.mock.calls.find(c => c[0] === 'imox/devices/1/ota/command' && c[1] === '')[3];
+      cleanUpCb(null); // Success
+    });
+
+    it('handleOtaStatus - invalid payload', async () => {
+      await (service as any).handleOtaStatus('imox/devices/1/ota/status', Buffer.from('{"status": "PENDING"}')); // Missing job_id
+      expect(mariaDb.ota_updates.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('handleOtaStatus - ota update not found', async () => {
+      (mariaDb.ota_updates.findUnique as jest.Mock).mockResolvedValue(null);
+      await (service as any).handleOtaStatus('imox/devices/1/ota/status', Buffer.from('{"job_id": "none", "status": "PENDING"}'));
+      expect(mariaDb.ota_updates.update).not.toHaveBeenCalled();
+    });
+
+    it('handleOtaStatus - catch error', async () => {
+      (mariaDb.ota_updates.findUnique as jest.Mock).mockRejectedValue(new Error('error'));
+      await (service as any).handleOtaStatus('imox/devices/1/ota/status', Buffer.from('{"job_id": "error", "status": "PENDING"}'));
     });
   });
 
