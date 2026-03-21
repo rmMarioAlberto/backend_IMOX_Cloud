@@ -1,0 +1,961 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/user/register": {
+      "post": {
+        "description": "Crea un usuario en MariaDB si el email no existe.",
+        "operationId": "UserController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Usuario creado exitosamente."
+          },
+          "400": {
+            "description": "Datos de entrada inválidos (validación fallida)."
+          },
+          "409": {
+            "description": "El correo electrónico ya está registrado."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registrar un nuevo usuario (public)",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/user/getProfile": {
+      "get": {
+        "description": "Obtiene los datos del perfil de un usuario por su ID.",
+        "operationId": "UserController_getProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Perfil obtenido exitosamente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetProfileDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Usuario no encontrado."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obtener perfil de usuario (private)",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/user/delete-account": {
+      "post": {
+        "description": "Elimina permanentemente la cuenta del usuario y sus datos de telemetría asociados.",
+        "operationId": "UserController_deleteAccount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Cuenta eliminada exitosamente."
+          },
+          "400": {
+            "description": "Usuario no encontrado."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Eliminar cuenta de usuario (private)",
+        "tags": [
+          "User"
+        ]
+      }
+    },
+    "/iot/create": {
+      "post": {
+        "operationId": "IotController_createIot",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "El dispositivo IoT ha sido registrado correctamente."
+          },
+          "400": {
+            "description": "Datos de entrada inválidos."
+          },
+          "403": {
+            "description": "Acceso prohibido."
+          },
+          "409": {
+            "description": "El dispositivo con esta dirección MAC ya existe."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registrar un nuevo dispositivo IoT (Admin)",
+        "tags": [
+          "IoT"
+        ]
+      }
+    },
+    "/iot/link": {
+      "post": {
+        "operationId": "IotController_linkUserIot",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkIotUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "El dispositivo IoT ha sido vinculado correctamente. Si estaba vinculado previamente, se limpiaron los datos de telemetría."
+          },
+          "400": {
+            "description": "Dispositivo no encontrado, inactivo o credenciales inválidas."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Vincular un dispositivo IoT a un usuario (Aprovisionamiento directo por el dispositivo) (público)",
+        "tags": [
+          "IoT"
+        ]
+      }
+    },
+    "/iot/list": {
+      "get": {
+        "operationId": "IotController_getIots",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Lista de dispositivos IoT recuperada con éxito.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseIotListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obtener todos los dispositivos IoT de un usuario (privado)",
+        "tags": [
+          "IoT"
+        ]
+      }
+    },
+    "/iot/history": {
+      "post": {
+        "operationId": "IotController_getHistory",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetHistoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lecturas históricas en formato ligero (columnas + datos).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseHistoryLightweightDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obtener datos históricos de telemetría para las gráficas (privado)",
+        "tags": [
+          "IoT"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "description": "Autentica un usuario con email y contraseña. Retorna Access Token (15m) y Refresh Token (7d). Soporta sesiones múltiples si se envía deviceId.",
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login exitoso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales inválidas"
+          },
+          "429": {
+            "description": "Demasiados intentos de login (Rate Limit: 5 req/min)"
+          }
+        },
+        "summary": "Iniciar sesión (public)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "description": "Invalida el Refresh Token del usuario desde la cookie httpOnly.",
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sesión cerrada exitosamente"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cerrar sesión (public)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/refresh-token": {
+      "post": {
+        "description": "Genera un nuevo par de tokens usando un Refresh Token válido desde cookies.",
+        "operationId": "AuthController_refreshToken",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Tokens renovados exitosamente (Rotación)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshTokenResponseControllerDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Refresh token inválido, expirado o reusado"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Refrescar Access Token (public)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/send-verification-code": {
+      "post": {
+        "description": "Genera y envía un código de 6 dígitos al email del usuario para restablecer la contraseña.",
+        "operationId": "AuthController_sendVerificationCode",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendVerificationCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Código enviado exitosamente"
+          }
+        },
+        "summary": "Enviar código de verificación (public)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/verify-code": {
+      "post": {
+        "description": "Valida que el código ingresado coincida con el guardado en Redis.",
+        "operationId": "AuthController_verifyCode",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Código válido"
+          },
+          "401": {
+            "description": "Código inválido o expirado"
+          }
+        },
+        "summary": "Verificar código (public)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "description": "Cambia la contraseña usando la dirección MAC del dispositivo IoT vinculado al usuario.",
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contraseña actualizada exitosamente"
+          },
+          "401": {
+            "description": "Dispositivo IoT no encontrado o vincuado a otro usuario"
+          }
+        },
+        "summary": "Restablecer contraseña (public)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/ota/upload": {
+      "post": {
+        "operationId": "OtaController_uploadFirmware",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Subir un archivo binario de firmware (Solo Admin)",
+        "tags": [
+          "OTA"
+        ]
+      }
+    },
+    "/ota": {
+      "post": {
+        "operationId": "OtaController_createOtaUpdate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOtaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comando OTA publicado exitosamente."
+          },
+          "400": {
+            "description": "Datos inválidos."
+          },
+          "403": {
+            "description": "Acceso prohibido."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar actualización OTA de firmware a dispositivos (Solo Admin)",
+        "tags": [
+          "OTA"
+        ]
+      }
+    },
+    "/ota/history": {
+      "get": {
+        "operationId": "OtaController_getHistory",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historial de actualizaciones OTA."
+          },
+          "403": {
+            "description": "Acceso prohibido."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Consultar historial de actualizaciones OTA (Solo Admin)",
+        "tags": [
+          "OTA"
+        ]
+      }
+    },
+    "/ota/available-files": {
+      "get": {
+        "operationId": "OtaController_getAvailableFiles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Lista de archivos .bin."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar archivos de firmware disponibles (Solo Admin)",
+        "tags": [
+          "OTA"
+        ]
+      }
+    },
+    "/ota/latest": {
+      "get": {
+        "operationId": "OtaController_getLatestUpdate",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Consultar la última actualización disponible",
+        "tags": [
+          "OTA"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "IMOX Cloud API",
+    "description": "Documentación de la API para el sistema IMOX Cloud IoT",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "RegisterUserDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Juan Pérez",
+            "description": "Nombre completo del usuario",
+            "maxLength": 50
+          },
+          "email": {
+            "type": "string",
+            "example": "usuario@imox.cloud",
+            "description": "Correo electrónico único",
+            "maxLength": 50
+          },
+          "password": {
+            "type": "string",
+            "example": "password123",
+            "description": "Contraseña segura (mínimo 8 caracteres)",
+            "minLength": 8,
+            "maxLength": 50
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password"
+        ]
+      },
+      "ResponseGetProfileDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1,
+            "description": "ID único del usuario"
+          },
+          "email": {
+            "type": "string",
+            "example": "user1@gmail.com",
+            "description": "Correo electrónico del usuario"
+          },
+          "name": {
+            "type": "string",
+            "example": "user",
+            "description": "Nombre del usuario"
+          },
+          "role": {
+            "type": "number",
+            "example": 1,
+            "description": "ID del rol asignado"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role"
+        ]
+      },
+      "CreateIotDto": {
+        "type": "object",
+        "properties": {
+          "macAddress": {
+            "type": "string",
+            "example": "00:1A:7D:DA:71:13",
+            "description": "Dirección MAC"
+          }
+        },
+        "required": [
+          "macAddress"
+        ]
+      },
+      "LinkIotUserDto": {
+        "type": "object",
+        "properties": {
+          "macAddress": {
+            "type": "string",
+            "example": "00:1A:7D:DA:71:13",
+            "description": "Dirección MAC"
+          },
+          "deviceSecret": {
+            "type": "string",
+            "example": "d3a7f8e1c2b5a49687d0e9f2a1b3c4d5e6f7a8b9c0d1e2f3",
+            "description": "Secreto del dispositivo (Device Secret)"
+          },
+          "userId": {
+            "type": "number",
+            "example": 1,
+            "description": "ID del usuario al que se vinculará"
+          }
+        },
+        "required": [
+          "macAddress",
+          "deviceSecret",
+          "userId"
+        ]
+      },
+      "IotDeviceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1,
+            "description": "ID del dispositivo IoT"
+          },
+          "macAddress": {
+            "type": "string",
+            "example": "00:1A:7D:DA:71:13",
+            "description": "Dirección MAC"
+          },
+          "status": {
+            "type": "number",
+            "example": 1,
+            "description": "Estado (1 = activo, 0 = inactivo)"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-12-30T10:38:09.000Z",
+            "description": "Fecha de creación"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-12-30T10:38:09.000Z",
+            "description": "Fecha de actualización"
+          }
+        },
+        "required": [
+          "id",
+          "macAddress",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ResponseIotListDto": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "description": "Lista de dispositivos IoT",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IotDeviceDto"
+            }
+          }
+        },
+        "required": [
+          "devices"
+        ]
+      },
+      "GetHistoryDto": {
+        "type": "object",
+        "properties": {
+          "startDate": {
+            "type": "string",
+            "example": "2024-01-01T00:00:00.000Z",
+            "description": "Fecha de inicio para la consulta de historial (ISO 8601)"
+          },
+          "endDate": {
+            "type": "string",
+            "example": "2024-01-07T23:59:59.999Z",
+            "description": "Fecha de fin para la consulta de historial (ISO 8601)"
+          },
+          "iotId": {
+            "type": "number",
+            "example": "1",
+            "description": "ID del dispositivo IoT"
+          }
+        },
+        "required": [
+          "startDate",
+          "endDate",
+          "iotId"
+        ]
+      },
+      "ResponseHistoryLightweightDto": {
+        "type": "object",
+        "properties": {
+          "columns": {
+            "example": [
+              "timestamp",
+              "voltaje",
+              "corriente",
+              "potencia",
+              "energia"
+            ],
+            "description": "Definición de las columnas",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "data": {
+            "example": [
+              [
+                "2025-12-30T10:00:00.000Z",
+                120,
+                10,
+                1200,
+                15
+              ],
+              [
+                "2025-12-30T10:05:00.000Z",
+                121,
+                11,
+                1220,
+                16
+              ]
+            ],
+            "description": "Puntos de datos como una matriz de matrices",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "columns",
+          "data"
+        ]
+      },
+      "LoginUserDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "usuario@imox.cloud",
+            "description": "Correo electrónico del usuario",
+            "maxLength": 50
+          },
+          "password": {
+            "type": "string",
+            "example": "password123",
+            "description": "Contraseña del usuario",
+            "minLength": 8,
+            "maxLength": 50
+          },
+          "deviceId": {
+            "type": "string",
+            "example": "android_uuid_12345",
+            "description": "Identificador único del dispositivo"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "LoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            "description": "Token de acceso JWT (válido por 15 minutos)"
+          },
+          "refreshToken": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            "description": "Token de refresco (válido por 7 días)"
+          },
+          "user": {
+            "type": "object",
+            "description": "Datos del usuario autenticado",
+            "example": {
+              "id": 1,
+              "name": "Juan Perez",
+              "email": "juan@imox.cloud",
+              "role": 1
+            }
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "user"
+        ]
+      },
+      "RefreshTokenResponseControllerDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            "description": "Nuevo token de acceso JWT"
+          }
+        },
+        "required": [
+          "accessToken"
+        ]
+      },
+      "SendVerificationCodeDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "usuario@imox.cloud",
+            "description": "Correo electrónico del usuario",
+            "maxLength": 50
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "VerifyCodeDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "usuario@imox.cloud",
+            "description": "Correo electrónico del usuario"
+          },
+          "code": {
+            "type": "string",
+            "example": "123456",
+            "description": "Código de verificación de 6 dígitos"
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ]
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "usuario@imox.cloud",
+            "description": "Correo electrónico del usuario"
+          },
+          "code": {
+            "type": "string",
+            "example": "123456",
+            "description": "Código de verificación de 6 dígitos"
+          },
+          "newPassword": {
+            "type": "string",
+            "example": "newPassword123",
+            "description": "Nueva contraseña del usuario",
+            "minLength": 8,
+            "maxLength": 50
+          }
+        },
+        "required": [
+          "email",
+          "code",
+          "newPassword"
+        ]
+      },
+      "CreateOtaDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "description": "Versión objetivo del firmware (ej: v2.1.0)"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL de descarga del binario del firmware (HTTPS)"
+          },
+          "hash": {
+            "type": "string",
+            "description": "Hash MD5/SHA256 del binario para verificación de integridad"
+          },
+          "target": {
+            "type": "object",
+            "description": "Dispositivos objetivo. Use \"ALL\" para todos los dispositivos activos, o un array de IDs: [1, 2, 3]",
+            "examples": {
+              "all": {
+                "value": "ALL"
+              },
+              "specific": {
+                "value": [
+                  1,
+                  2,
+                  3
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "version",
+          "url",
+          "target"
+        ]
+      }
+    }
+  }
+}

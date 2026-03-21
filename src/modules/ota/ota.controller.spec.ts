@@ -18,6 +18,8 @@ describe('OtaController', () => {
             createOtaUpdate: jest.fn().mockResolvedValue({ message: 'ok', total: 1 }),
             getOtaHistory: jest.fn().mockResolvedValue([]),
             uploadFirmware: jest.fn().mockResolvedValue({ url: 'test-url', hash: 'test-hash' }),
+            getAvailableFiles: jest.fn().mockResolvedValue([]),
+            getLatestUpdate: jest.fn().mockResolvedValue({ version: 'v1' }),
           },
         },
       ],
@@ -70,8 +72,22 @@ describe('OtaController', () => {
     });
 
     it('should call service getOtaHistory without id', async () => {
-      await controller.getHistory(undefined);
+      await controller.getHistory();
       expect(service.getOtaHistory).toHaveBeenCalledWith(undefined);
+    });
+  });
+
+  describe('getAvailableFiles', () => {
+    it('should call service getAvailableFiles', async () => {
+      await controller.getAvailableFiles();
+      expect(service.getAvailableFiles).toHaveBeenCalled();
+    });
+  });
+
+  describe('getLatestUpdate', () => {
+    it('should call service getLatestUpdate', async () => {
+      await controller.getLatestUpdate(123);
+      expect(service.getLatestUpdate).toHaveBeenCalledWith(123);
     });
   });
 });

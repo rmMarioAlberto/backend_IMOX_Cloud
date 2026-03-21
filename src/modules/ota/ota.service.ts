@@ -4,7 +4,7 @@ import { MqttService } from '../mqtt/mqtt.service';
 import { CreateOtaDto } from './dto/create-ota.dto';
 import { randomUUID, createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { writeFileSync, existsSync, mkdirSync, readdirSync, statSync, readFileSync } from 'node:fs';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -37,9 +37,8 @@ export class OtaService {
     // Calcular el hash SHA256
     const hash = createHash('sha256').update(file.buffer).digest('hex');
 
-    // Generar la URL (Usando el dominio de Tailscale Funnel proporcionado por el usuario)
-    // En el futuro esto podría venir del ConfigService si el dominio cambia.
-    const baseUrl = 'https://dietpi.tail02564c.ts.net';
+    // Generar la URL (Usando el dominio proporcionado por el usuario en .env)
+    const baseUrl = this.configService.get<string>('OTA_BASE_URL') || 'http://localhost:3000';
     const downloadUrl = `${baseUrl}/ota/downloads/${fileName}`;
 
     this.logger.log(`Nuevo firmware subido: ${fileName}. Hash: ${hash}`);
@@ -62,6 +61,9 @@ export class OtaService {
     this.logger.log(
       `Iniciando OTA versión ${dto.version}. Target: ${JSON.stringify(dto.target)}`,
     );
+    
+    // Validar que el firmware existe y el hash es correcto si es una URL local
+    this.validateFirmwareFile(dto.url, dto.hash);
 
     // Resolver la lista de dispositivos objetivo
     let devicesToUpdate: { id: number; mac_address: string }[];
@@ -159,5 +161,82 @@ export class OtaService {
         updated_at: true,
       },
     });
+  }
+
+  /**
+   * @description Lista todos los archivos binarios disponibles en la carpeta de subidas.
+   */
+  async getAvailableFiles() {
+    const uploadDir = join(process.cwd(), 'uploads', 'ota');
+    if (!existsSync(uploadDir)) {
+      return [];
+    }
+
+    const files = readdirSync(uploadDir);
+    return files
+      .filter((f) => f.endsWith('.bin'))
+      .map((fileName) => {
+        const stats = statSync(join(uploadDir, fileName));
+        const baseUrl = this.configService.get<string>('OTA_BASE_URL') || 'http://localhost:3000';
+        return {
+          fileName,
+          size: stats.size,
+          createdAt: stats.birthtime,
+          url: `${baseUrl}/ota/downloads/${fileName}`,
+        };
+      })
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  /**
+   * @description Devuelve la actualización más reciente disponible para un dispositivo.
+   */
+  async getLatestUpdate(deviceId?: number) {
+    const where = deviceId ? { device_id: deviceId } : {};
+    return this.prisma.ota_updates.findFirst({
+      where,
+      orderBy: { created_at: 'desc' },
+      select: {
+        id: true,
+        job_id: true,
+        version: true,
+        url: true,
+        hash: true,
+        status: true,
+        device_id: true,
+        created_at: true,
+      },
+    });
+  }
+
+  /**
+   * @description Verifica si un archivo de firmware existe localmente y si su hash coincide.
+   * @throws BadRequestException si el archivo no existe o el hash es incorrecto.
+   */
+  private validateFirmwareFile(url: string, providedHash?: string) {
+    const configBaseUrl = this.configService.get<string>('OTA_BASE_URL') || 'http://localhost:3000';
+    const baseUrl = `${configBaseUrl}/ota/downloads/`;
+    if (!url.startsWith(baseUrl)) {
+      this.logger.warn(`URL externa detectada para OTA: ${url}. Saltando validación local.`);
+      return;
+    }
+
+    const fileName = url.replace(baseUrl, '');
+    const uploadDir = join(process.cwd(), 'uploads', 'ota');
+    const filePath = join(uploadDir, fileName);
+
+    if (!existsSync(filePath)) {
+      throw new BadRequestException(`El archivo de firmware especificado no existe en el servidor: ${fileName}`);
+    }
+
+    if (providedHash) {
+      const fileBuffer = readFileSync(filePath);
+      const actualHash = createHash('sha256').update(fileBuffer).digest('hex');
+      if (actualHash !== providedHash) {
+        throw new BadRequestException(
+          `El hash proporcionado no coincide con el archivo en el servidor. Proporcionado: ${providedHash.substring(0, 8)}..., Actual: ${actualHash.substring(0, 8)}...`,
+        );
+      }
+    }
   }
 }

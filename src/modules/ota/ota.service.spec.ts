@@ -10,6 +10,9 @@ jest.mock('node:fs', () => ({
   existsSync: jest.fn(),
   mkdirSync: jest.fn(),
   writeFileSync: jest.fn(),
+  readdirSync: jest.fn(),
+  statSync: jest.fn(),
+  readFileSync: jest.fn(),
 }));
 
 describe('OtaService', () => {
@@ -31,6 +34,7 @@ describe('OtaService', () => {
             ota_updates: {
               create: jest.fn(),
               findMany: jest.fn(),
+              findFirst: jest.fn(),
             },
           },
         },
@@ -43,7 +47,10 @@ describe('OtaService', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn(),
+            get: jest.fn().mockImplementation((key: string) => {
+              if (key === 'OTA_BASE_URL') return 'https://dietpi.tail02564c.ts.net';
+              return null;
+            }),
           },
         },
       ],
@@ -128,6 +135,31 @@ describe('OtaService', () => {
     it('should throw BadRequestException if target is not "ALL" and not an array', async () => {
       await expect(service.createOtaUpdate({ ...dto, target: 123 as any })).rejects.toThrow(BadRequestException);
     });
+
+    it('should throw BadRequestException if local firmware file does not exist', async () => {
+      const localDto = {
+        ...dto,
+        url: 'https://dietpi.tail02564c.ts.net/ota/downloads/missing.bin',
+      };
+      (fs.existsSync as jest.Mock).mockReturnValue(false);
+
+      await expect(service.createOtaUpdate(localDto)).rejects.toThrow(
+        'El archivo de firmware especificado no existe en el servidor: missing.bin',
+      );
+    });
+
+    it('should throw BadRequestException if local firmware hash does not match', async () => {
+      const localDto = {
+        ...dto,
+        url: 'https://dietpi.tail02564c.ts.net/ota/downloads/valid.bin',
+        hash: 'wrong-hash',
+      };
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.readFileSync as jest.Mock).mockReturnValue(Buffer.from('correct-content'));
+      // El hash de 'correct-content' no será 'wrong-hash'
+
+      await expect(service.createOtaUpdate(localDto)).rejects.toThrow('El hash proporcionado no coincide');
+    });
   });
 
   describe('getOtaHistory', () => {
@@ -172,6 +204,45 @@ describe('OtaService', () => {
       (fs.existsSync as jest.Mock).mockReturnValue(true);
       await service.uploadFirmware(mockFile);
       expect(fs.mkdirSync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getAvailableFiles', () => {
+    it('should return empty array if directory does not exist', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      const result = await service.getAvailableFiles();
+      expect(result).toEqual([]);
+    });
+
+    it('should return list of .bin files', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.readdirSync as jest.Mock).mockReturnValue(['firmware1.bin', 'readme.txt', 'firmware2.bin']);
+      (fs.statSync as jest.Mock).mockReturnValue({
+        size: 1024,
+        birthtime: new Date(),
+      });
+
+      const result = await service.getAvailableFiles();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].fileName).toBe('firmware1.bin');
+      expect(result[0].url).toContain('firmware1.bin');
+    });
+  });
+
+  describe('getLatestUpdate', () => {
+    it('should call findFirst with correct parameters', async () => {
+      const mockUpdate = { version: 'v1.0.1' };
+      (mariaDbService.ota_updates.findFirst as jest.Mock) = jest.fn().mockResolvedValue(mockUpdate);
+
+      const result = await service.getLatestUpdate(123);
+
+      expect(mariaDbService.ota_updates.findFirst).toHaveBeenCalledWith({
+        where: { device_id: 123 },
+        orderBy: { created_at: 'desc' },
+        select: expect.any(Object),
+      });
+      expect(result).toEqual(mockUpdate);
     });
   });
 });

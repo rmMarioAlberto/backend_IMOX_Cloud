@@ -26,6 +26,7 @@ import {
   ApiOkResponse,
   ApiQuery,
 } from '@nestjs/swagger';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('OTA')
 @ApiBearerAuth()
@@ -85,5 +86,35 @@ export class OtaController {
     deviceId?: number,
   ) {
     return this.otaService.getOtaHistory(deviceId);
+  }
+
+  /**
+   * GET /ota/available-files
+   * Lista archivos .bin en el servidor. Solo Admin.
+   */
+  @Get('available-files')
+  @Roles(2)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Listar archivos de firmware disponibles (Solo Admin)' })
+  @ApiOkResponse({ description: 'Lista de archivos .bin.' })
+  async getAvailableFiles() {
+    return this.otaService.getAvailableFiles();
+  }
+
+  /**
+   * GET /ota/latest
+   * Consulta la actualización más reciente disponible para un dispositivo.
+   * Usado por los dispositivos IoT para auto-descubrimiento.
+   */
+  @Get('latest')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Consultar la última actualización disponible' })
+  @ApiQuery({ name: 'deviceId', required: false, type: Number })
+  async getLatestUpdate(
+    @Query('deviceId', new ParseIntPipe({ optional: true }))
+    deviceId?: number,
+  ) {
+    return this.otaService.getLatestUpdate(deviceId);
   }
 }
