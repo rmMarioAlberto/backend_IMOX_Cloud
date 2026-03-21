@@ -65,10 +65,6 @@ export class TelemetryScheduler {
 
     const readings = this.transformToReadings(criticalEvents, lastReading);
 
-    if (readings.length === 0) {
-      return;
-    }
-
     await this.saveReadingsToInflux(iotId, readings);
     await this.redisService.clearCriticalEvents(iotId);
   }

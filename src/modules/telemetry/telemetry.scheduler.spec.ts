@@ -64,6 +64,42 @@ describe('TelemetryScheduler', () => {
       (influxService.writeTelemetryPoint as jest.Mock).mockRejectedValueOnce(new Error('Influx error'));
       await expect(scheduler.persistAllDevices()).resolves.not.toThrow();
     });
+
+    it('should skip device if no user_id is assigned', async () => {
+      (mariaDb.iot.findUnique as jest.Mock).mockResolvedValueOnce({ user_id: null });
+      await scheduler.persistAllDevices();
+      expect(influxService.writeTelemetryPoint).not.toHaveBeenCalled();
+    });
+
+    it('should process critical events even if lastReading is null', async () => {
+      (redisService.getTelemetryLast as jest.Mock).mockResolvedValueOnce(null);
+      (redisService.getCriticalEvents as jest.Mock).mockResolvedValueOnce([{
+        anomaly_type: 'SPIKE',
+        electricas: { voltaje_v: 150 },
+        timestamp: new Date().toISOString()
+      }]);
+      
+      await scheduler.persistAllDevices();
+      expect(influxService.writeTelemetryPoint).toHaveBeenCalledWith(1, expect.objectContaining({
+        anomaly_type: 'SPIKE'
+      }));
+    });
+
+    it('should handle critical events with missing data', async () => {
+       (redisService.getCriticalEvents as jest.Mock).mockResolvedValueOnce([{
+         anomaly_type: 'SPIKE',
+         timestamp: new Date().toISOString()
+       }]);
+       await scheduler.persistAllDevices();
+       expect(influxService.writeTelemetryPoint).toHaveBeenCalled();
+    });
+
+    it('should return early if both lastReading and criticalEvents are empty', async () => {
+      (redisService.getTelemetryLast as jest.Mock).mockResolvedValueOnce(null);
+      (redisService.getCriticalEvents as jest.Mock).mockResolvedValueOnce([]);
+      await scheduler.persistAllDevices();
+      expect(mariaDb.iot.findUnique).not.toHaveBeenCalled();
+    });
   });
 
   describe('checkDeviceHealth', () => {
@@ -89,6 +125,12 @@ describe('TelemetryScheduler', () => {
       (mariaDb.iot.update as jest.Mock).mockRejectedValueOnce(new Error('DB Failed'));
       (redisService.getTelemetryLast as jest.Mock).mockResolvedValue({ timestamp: new Date('2020-01-01').toISOString() });
       await expect(scheduler.checkDeviceHealth()).resolves.not.toThrow();
+    });
+
+    it('should skip if lastData is null in checkDeviceHealth', async () => {
+      (redisService.getTelemetryLast as jest.Mock).mockResolvedValueOnce(null);
+      await scheduler.checkDeviceHealth();
+      expect(mariaDb.iot.update).not.toHaveBeenCalled();
     });
   });
 });

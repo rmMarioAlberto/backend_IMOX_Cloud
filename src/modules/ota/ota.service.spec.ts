@@ -4,6 +4,7 @@ import { MariaDbService } from '../database/mariadb.service';
 import { MqttService } from '../mqtt/mqtt.service';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 
 jest.mock('node:fs', () => ({
@@ -160,6 +161,43 @@ describe('OtaService', () => {
 
       await expect(service.createOtaUpdate(localDto)).rejects.toThrow('El hash proporcionado no coincide');
     });
+
+    it('should skip local validation for external URLs', async () => {
+      (mariaDbService.iot.findMany as jest.Mock).mockResolvedValue([{ id: 1 }]);
+      const externalDto = {
+        ...dto,
+        url: 'https://external-firmware.com/image.bin',
+      };
+      await service.createOtaUpdate(externalDto);
+      expect(fs.existsSync).not.toHaveBeenCalled();
+    });
+
+    it('should skip hash check if providedHash is not present', async () => {
+      (mariaDbService.iot.findMany as jest.Mock).mockResolvedValue([{ id: 1 }]);
+      const localDto = {
+        ...dto,
+        url: 'https://dietpi.tail02564c.ts.net/ota/downloads/valid.bin',
+      };
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      await service.createOtaUpdate(localDto);
+      expect(fs.readFileSync).not.toHaveBeenCalled();
+    });
+
+    it('should pass if local firmware hash matches', async () => {
+      (mariaDbService.iot.findMany as jest.Mock).mockResolvedValue([{ id: 1 }]);
+      const content = 'correct-content';
+      const hash = createHash('sha256').update(content).digest('hex');
+      const localDto = {
+        ...dto,
+        url: 'https://dietpi.tail02564c.ts.net/ota/downloads/valid.bin',
+        hash: hash,
+      };
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.readFileSync as jest.Mock).mockReturnValue(Buffer.from(content));
+
+      await service.createOtaUpdate(localDto);
+      expect(mqttService.publishOtaCommand).toHaveBeenCalled();
+    });
   });
 
   describe('getOtaHistory', () => {
@@ -204,6 +242,30 @@ describe('OtaService', () => {
       (fs.existsSync as jest.Mock).mockReturnValue(true);
       await service.uploadFirmware(mockFile);
       expect(fs.mkdirSync).not.toHaveBeenCalled();
+    });
+
+    it('should use default localhost URL if config is missing', async () => {
+      (mariaDbService.ota_updates.findFirst as jest.Mock).mockResolvedValue({});
+      (mariaDbService.iot.findMany as jest.Mock).mockResolvedValue([{ id: 1 }]);
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.readdirSync as jest.Mock).mockReturnValue(['firmware.bin']);
+      (fs.statSync as jest.Mock).mockReturnValue({ size: 100, birthtime: new Date() });
+      
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          OtaService,
+          { provide: MariaDbService, useValue: mariaDbService },
+          { provide: MqttService, useValue: mqttService },
+          { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(null) } },
+        ],
+      }).compile();
+      const localService = module.get<OtaService>(OtaService);
+      
+      const result = await localService.uploadFirmware(mockFile);
+      expect(result.url).toContain('http://localhost:3000');
+
+      const files = await localService.getAvailableFiles();
+      if (files.length > 0) expect(files[0].url).toContain('http://localhost:3000');
     });
   });
 

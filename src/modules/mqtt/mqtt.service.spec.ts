@@ -111,6 +111,10 @@ describe('MqttService', () => {
       subHistorycb(new Error('test'));
       subHistorycb(null);
 
+      const subOtaStatuscb = mockClient.subscribe.mock.calls[2][1];
+      subOtaStatuscb(new Error('test'));
+      subOtaStatuscb(null);
+
       // trigger error
       errorCb(new Error('mqtt error'));
 
@@ -121,6 +125,7 @@ describe('MqttService', () => {
       // Payload has to be parseable JSON
       await messageCb('imox/devices/1/telemetry', Buffer.from('{"electricas": {"voltaje_v": 120}}'));
       await messageCb('imox/devices/1/history/request', Buffer.from('{"startDate": "2023-01-01T00:00:00Z", "endDate": "2023-01-02T00:00:00Z"}'));
+      await messageCb('imox/devices/1/ota/status', Buffer.from('{"job_id": "test", "status": "COMPLETED"}'));
       await messageCb('unknown/topic', Buffer.from('{}'));
     });
   });
@@ -190,6 +195,10 @@ describe('MqttService', () => {
           endDate: '2023-01-02T00:00:00Z',
         }),
       );
+
+      const influxService = service['influxService'] as any;
+      influxService.queryAggregatedTelemetry.mockResolvedValueOnce([{ _time: '2023-01-01T00:00:00Z', voltaje_v: 120 }]);
+      influxService.queryAnomaliesRange.mockResolvedValueOnce([{ _time: '2023-01-01T00:00:30Z', voltaje_v: 150, anomaly_type: 'SPIKE' }]);
 
       await (service as any).handleHistoryRequest(topic, payload);
       const clientMock = (service as any).client;
@@ -291,5 +300,11 @@ describe('MqttService', () => {
     await service.onModuleDestroy();
     const clientMock = (service as any).client;
     expect(clientMock.end).toHaveBeenCalled();
+  });
+
+  describe('Internal Helpers', () => {
+    it('extractIotIdFromTopic should split topic correctly', () => {
+      expect((service as any).extractIotIdFromTopic('imox/devices/1/telemetry')).toBe(1);
+    });
   });
 });

@@ -41,6 +41,12 @@ describe('SpikeDetectorService', () => {
       expect(result.type).toBe('LIMIT');
     });
 
+    it('should return NONE when electricas is missing', () => {
+      const result = service.detectAnomaly({} as any, null);
+      expect(result.isCritical).toBe(false);
+      expect(result.type).toBe('NONE');
+    });
+
     it('should return LIMIT when voltage is too low', () => {
       const current = { electricas: { voltaje_v: 80 } } as any;
       const result = service.detectAnomaly(current, null);
@@ -77,6 +83,34 @@ describe('SpikeDetectorService', () => {
 
       expect(result.isCritical).toBe(false);
       expect(result.type).toBe('NONE');
+    });
+
+    it('should handle null values in voltage', () => {
+      const current = { electricas: { voltaje_v: null } } as any;
+      const result = service.detectAnomaly(current, { electricas: { voltaje_v: 120 } } as any);
+      expect(result.isCritical).toBe(false);
+    });
+
+    it('should handle baseline with missing electricas', () => {
+      const current = { electricas: { voltaje_v: 120 } } as any;
+      const result = service.detectAnomaly(current, {} as any);
+      expect(result.isCritical).toBe(false);
+    });
+
+    it('should handle base value zero', () => {
+       const current = { electricas: { voltaje_v: 120, corriente_a: 5, potencia_w: 600 } } as any;
+       const baseline = { electricas: { voltaje_v: 0, corriente_a: 0, potencia_w: 0 } } as any;
+       const result = service.detectAnomaly(current, baseline);
+       expect(result.isCritical).toBe(true);
+    });
+
+    it('should combine multiple spike reasons', () => {
+       const current = { electricas: { voltaje_v: 130, corriente_a: 10, potencia_w: 2000 } } as any;
+       const baseline = { electricas: { voltaje_v: 100, corriente_a: 5, potencia_w: 1000 } } as any;
+       const result = service.detectAnomaly(current, baseline);
+       expect(result.message).toContain('Volt');
+       expect(result.message).toContain('Amp');
+       expect(result.message).toContain('Pwr');
     });
   });
 });

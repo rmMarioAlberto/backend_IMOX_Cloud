@@ -25,19 +25,7 @@ import { toTelemetryResponse } from './utils/telemetry.mapper';
     origin: (
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void,
-    ) => {
-      // Leer origen permitido desde variable de entorno (igual que corsConfig HTTP)
-      // En desarrollo o si no está definido se permite *
-      const corsOrigins = process.env.CORS_ORIGINS;
-      if (!corsOrigins || corsOrigins === '*' || !origin) {
-        return callback(null, true);
-      }
-      const allowed = corsOrigins.split(',').map((o) => o.trim());
-      if (allowed.includes(origin)) {
-        return callback(null, true);
-      }
-      callback(new Error(`Origen WebSocket no permitido: ${origin}`));
-    },
+    ) => TelemetryGateway.corsOriginFactory(origin, callback),
     credentials: true,
   },
   namespace: 'telemetry',
@@ -50,6 +38,21 @@ export class TelemetryGateway
   server: Server;
 
   private readonly logger = new Logger(TelemetryGateway.name);
+
+  static corsOriginFactory(
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) {
+    const corsOrigins = process.env.CORS_ORIGINS;
+    if (!corsOrigins || corsOrigins === '*' || !origin) {
+      return callback(null, true);
+    }
+    const allowed = corsOrigins.split(',').map((o) => o.trim());
+    if (allowed.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error(`Origen WebSocket no permitido: ${origin}`));
+  }
 
   constructor(
     private readonly jwtService: JwtService,

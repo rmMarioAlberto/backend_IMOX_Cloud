@@ -91,10 +91,23 @@ describe('TelemetryGateway', () => {
     });
 
     it('should disconnect if token is blacklisted', async () => {
-      const mockRedis = moduleInstance.get(AuthRedisService) as any;
-      mockRedis.isTokenBlacklisted.mockResolvedValueOnce(true);
+      const mockRedis = moduleInstance.get<AuthRedisService>(AuthRedisService);
+      (mockRedis.isTokenBlacklisted as jest.Mock).mockResolvedValueOnce(true);
       await gateway.handleConnection(mockClient);
       expect(mockClient.disconnect).toHaveBeenCalled();
+    });
+
+    it('should handle errors during connection and disconnect', async () => {
+      const mockJwt = moduleInstance.get<JwtService>(JwtService);
+      (mockJwt.verifyAccessToken as jest.Mock).mockRejectedValueOnce(new Error('JWT Error'));
+      await gateway.handleConnection(mockClient);
+      expect(mockClient.disconnect).toHaveBeenCalled();
+    });
+
+    it('should log on handleDisconnect', () => {
+      const loggerSpy = jest.spyOn((gateway as any).logger, 'log');
+      gateway.handleDisconnect(mockClient);
+      expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Cliente desconectado'));
     });
   });
 
@@ -111,25 +124,45 @@ describe('TelemetryGateway', () => {
     });
 
     it('should throw error if device not found', async () => {
-      const mockDb = moduleInstance.get(MariaDbService) as any;
-      mockDb.iot.findUnique.mockResolvedValueOnce(null);
+      const mockDb = moduleInstance.get<MariaDbService>(MariaDbService);
+      (mockDb.iot.findUnique as jest.Mock).mockResolvedValueOnce(null);
       await expect(gateway.handleSubscribeToDevice(mockClient, { iotId: 99 })).rejects.toThrow();
     });
 
     it('should throw error if user does not own device', async () => {
-      const mockDb = moduleInstance.get(MariaDbService) as any;
-      mockDb.iot.findUnique.mockResolvedValueOnce({ user_id: 2 });
+      const mockDb = moduleInstance.get<MariaDbService>(MariaDbService);
+      (mockDb.iot.findUnique as jest.Mock).mockResolvedValueOnce({ user_id: 2 });
       await expect(gateway.handleSubscribeToDevice(mockClient, { iotId: 1 })).rejects.toThrow();
     });
 
     it('should not emit telemetry if both redis and influx return nothing', async () => {
-      const mockRedis = moduleInstance.get(TelemetryRedisService) as any;
-      const mockInflux = moduleInstance.get(TelemetryInfluxService) as any;
-      mockRedis.getTelemetryLast.mockResolvedValueOnce(null);
-      mockInflux.queryLatestTelemetry.mockResolvedValueOnce(null);
+      const mockRedis = moduleInstance.get<TelemetryRedisService>(TelemetryRedisService);
+      const mockInflux = moduleInstance.get<TelemetryInfluxService>(TelemetryInfluxService);
+      (mockRedis.getTelemetryLast as jest.Mock).mockResolvedValueOnce(null);
+      (mockInflux.queryLatestTelemetry as jest.Mock).mockResolvedValueOnce(null);
       
       await gateway.handleSubscribeToDevice(mockClient, { iotId: 1 });
       expect(mockClient.emit).not.toHaveBeenCalled();
+    });
+
+    it('should throw WsException if iotId is missing', async () => {
+      await expect(gateway.handleSubscribeToDevice(mockClient, { iotId: 0 })).rejects.toThrow();
+    });
+
+    it('should throw WsException if user is missing in client data', async () => {
+      mockClient.data.user = null;
+      await expect(gateway.handleSubscribeToDevice(mockClient, { iotId: 1 })).rejects.toThrow();
+    });
+
+    it('should emit data from Redis if available', async () => {
+      const mockRedis = moduleInstance.get<TelemetryRedisService>(TelemetryRedisService);
+      (mockRedis.getTelemetryLast as jest.Mock).mockResolvedValueOnce({
+        electricas: { voltaje_v: 120 },
+        diagnostico: { rssi_dbm: -50 },
+        timestamp: new Date(),
+      });
+      await gateway.handleSubscribeToDevice(mockClient, { iotId: 1 });
+      expect(mockClient.emit).toHaveBeenCalledWith('telemetry', expect.any(Object));
     });
   });
 
@@ -148,27 +181,29 @@ describe('TelemetryGateway', () => {
 
   describe('CORS Configuration', () => {
     it('should validate CORS origins properly', () => {
-      // Intentamos recuperar la metadata de los WebSockets donde está codificada nuestra funcion origen
-      // En NestJS 10, es '__ws_meta__' o 'gateway'
-      const metadata = Reflect.getMetadata('__ws_meta__', TelemetryGateway) || Reflect.getMetadata('gateway', TelemetryGateway);
-      const corsCb = metadata?.cors?.origin;
-      if (typeof corsCb === 'function') {
-         const cb = jest.fn();
-         
-         // Permitir todos en DEV
-         process.env.CORS_ORIGINS = '*';
-         corsCb('http://localhost', cb);
-         expect(cb).toHaveBeenCalledWith(null, true);
-         
-         // Validaciones restrictas
-         process.env.CORS_ORIGINS = 'http://test.com, http://example.com';
-         corsCb('http://test.com', cb);
-         expect(cb).toHaveBeenCalledWith(null, true);
+      const cb = jest.fn();
+      
+      // Permitir todos en DEV o si no hay variable
+      delete process.env.CORS_ORIGINS;
+      TelemetryGateway.corsOriginFactory('http://localhost', cb);
+      expect(cb).toHaveBeenCalledWith(null, true);
 
-         // Bloqueo
-         corsCb('http://bad.com', cb);
-         expect(cb.mock.calls[2][0]).toBeInstanceOf(Error);
-      }
+      process.env.CORS_ORIGINS = '*';
+      TelemetryGateway.corsOriginFactory('http://localhost', cb);
+      expect(cb).toHaveBeenCalledWith(null, true);
+
+      // Origen vacío (ej: postman o client-to-client)
+      TelemetryGateway.corsOriginFactory(undefined, cb);
+      expect(cb).toHaveBeenCalledWith(null, true);
+      
+      // Validaciones restrictas
+      process.env.CORS_ORIGINS = 'http://test.com, http://example.com';
+      TelemetryGateway.corsOriginFactory('http://test.com', cb);
+      expect(cb).toHaveBeenCalledWith(null, true);
+
+      // Bloqueo
+      TelemetryGateway.corsOriginFactory('http://bad.com', cb);
+      expect(cb).toHaveBeenCalledWith(expect.any(Error));
     });
   });
 

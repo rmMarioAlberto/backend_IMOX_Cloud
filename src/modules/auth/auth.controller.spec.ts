@@ -54,6 +54,17 @@ describe('AuthController', () => {
       expect(result.accessToken).toBe('access');
       expect(mockRes.cookie).toHaveBeenCalled();
     });
+
+    it('should set secure cookie in production', async () => {
+      jest.spyOn(controller['configService'], 'get').mockReturnValue('production');
+      const mockRes = { cookie: jest.fn() } as any;
+      await controller.login({ email: 'test@imox.com', password: 'test' }, mockRes);
+      expect(mockRes.cookie).toHaveBeenCalledWith(
+        'refreshToken',
+        expect.any(String),
+        expect.objectContaining({ secure: true }),
+      );
+    });
   });
 
   describe('logout', () => {
@@ -85,6 +96,18 @@ describe('AuthController', () => {
       expect(authService.refreshToken).toHaveBeenCalledWith('123');
       expect(mockRes.cookie).toHaveBeenCalled();
       expect(result.accessToken).toBe('new-access');
+    });
+
+    it('should set secure cookie in production during refresh', async () => {
+      jest.spyOn(controller['configService'], 'get').mockReturnValue('production');
+      const mockReq = { cookies: { refreshToken: '123' } } as any;
+      const mockRes = { cookie: jest.fn() } as any;
+      await controller.refreshToken(mockReq, mockRes);
+      expect(mockRes.cookie).toHaveBeenCalledWith(
+        'refreshToken',
+        expect.any(String),
+        expect.objectContaining({ secure: true }),
+      );
     });
 
     it('should throw UnauthorizedException if refreshToken cookie missing in refresh token', async () => {

@@ -85,9 +85,14 @@ describe('OtaController', () => {
   });
 
   describe('getLatestUpdate', () => {
-    it('should call service getLatestUpdate', async () => {
+    it('should call service getLatestUpdate with deviceId number', async () => {
       await controller.getLatestUpdate(123);
       expect(service.getLatestUpdate).toHaveBeenCalledWith(123);
+    });
+
+    it('should call service getLatestUpdate without deviceId', async () => {
+      await controller.getLatestUpdate();
+      expect(service.getLatestUpdate).toHaveBeenCalledWith(undefined);
     });
   });
 });

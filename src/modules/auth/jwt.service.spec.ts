@@ -67,4 +67,42 @@ describe('JwtService (Custom Wrapper)', () => {
     expect(result).toEqual({ sub: 1 });
     expect(nestJwtService.decode).toHaveBeenCalled();
   });
+
+  it('should use default expiration times if options are not set in config', async () => {
+    // Re-mocking configService to return undefined for expirations
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        JwtService,
+        {
+          provide: NestJwtService,
+          useValue: { signAsync: jest.fn().mockResolvedValue('token') },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockImplementation((key) => {
+              if (key === 'JWT_ACCESS_SECRET') return 'secret';
+              if (key === 'JWT_REFRESH_SECRET') return 'secret';
+              return undefined;
+            }),
+          },
+        },
+      ],
+    }).compile();
+
+    const localService = module.get<JwtService>(JwtService);
+    const localNestJwt = module.get<NestJwtService>(NestJwtService);
+
+    await localService.generateAccessToken({ sub: 1 });
+    expect(localNestJwt.signAsync).toHaveBeenCalledWith(
+      { sub: 1 },
+      expect.objectContaining({ expiresIn: '15m' }),
+    );
+
+    await localService.generateRefreshToken({ sub: 1 });
+    expect(localNestJwt.signAsync).toHaveBeenCalledWith(
+      { sub: 1 },
+      expect.objectContaining({ expiresIn: '7d' }),
+    );
+  });
 });

@@ -107,6 +107,11 @@ describe('AuthService', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
       await expect(service.login({ email: 'test@imox.com', password: 'wrong' })).rejects.toThrow(UnauthorizedException);
     });
+
+    it('should throw UnauthorizedException if user not found', async () => {
+      (mariaDbService.users.findUnique as jest.Mock).mockResolvedValueOnce(null);
+      await expect(service.login({ email: 'no-existe@imox.com', password: 'any' })).rejects.toThrow(UnauthorizedException);
+    });
   });
 
   describe('logout', () => {
@@ -149,6 +154,12 @@ describe('AuthService', () => {
     it('should throw if user not found or inactive', async () => {
       (mariaDbService.users.findUnique as jest.Mock).mockResolvedValueOnce(null);
       await expect(service.refreshToken('valid-token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should apply rotation/blacklist and return new tokens', async () => {
+       const result = await service.refreshToken('valid-refresh-token');
+       expect(redisService.blacklistToken).toHaveBeenCalled();
+       expect(result).toHaveProperty('accessToken');
     });
   });
 
@@ -199,6 +210,11 @@ describe('AuthService', () => {
     it('should throw if user not found', async () => {
       (mariaDbService.users.findUnique as jest.Mock).mockResolvedValueOnce(null);
       await expect(service.resetPassword({ email: 'no-existe@imox.com', code: '123456', newPassword: 'pass' })).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw if code is invalid', async () => {
+      (redisService.getVerificationCode as jest.Mock).mockResolvedValueOnce('wrong');
+      await expect(service.resetPassword({ email: 'test@imox.com', code: '123456', newPassword: 'pass' })).rejects.toThrow(UnauthorizedException);
     });
   });
 });
